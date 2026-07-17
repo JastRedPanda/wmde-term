@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>fun.wmde.term</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <project_group>WMDE</project_group>
+  <developer_name>WMDE</developer_name>
+  <url type="homepage">https://github.com/Lin-WMDE/wmde-term</url>
+  <url type="bugtracker">https://github.com/Lin-WMDE/wmde-term</url>
+  <name>WMDE Terminal</name>
+  <summary>Terminal emulator for the WMDE desktop</summary>
+  <description>
+    <p>Terminal emulator for the WMDE desktop</p>
+  </description>
+  <keywords>
+    <keyword>Command</keyword>
+    <keyword>Shell</keyword>
+    <keyword>Terminal</keyword>
+    <keyword>CLI</keyword>
+  </keywords>
+  <launchable type="desktop-id">fun.wmde.term.desktop</launchable>
+  <provides>
+    <binaries>
+      <binary>wmde-term</binary>
+    </binaries>
+  </provides>
+</component>

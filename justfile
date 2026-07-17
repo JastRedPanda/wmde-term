@@ -1,5 +1,5 @@
-name := 'cosmic-term'
-export APPID := 'com.system76.CosmicTerm'
+name := 'wmde-term'
+export APPID := 'fun.wmde.term'
 
 rootdir := ''
 prefix := '/usr'

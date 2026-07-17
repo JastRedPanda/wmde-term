@@ -430,7 +430,7 @@ mod store {
         let collection = ss.get_default_collection().await?;
 
         let mut attributes = std::collections::HashMap::new();
-        attributes.insert("application", "com.system76.CosmicTerm");
+        attributes.insert("application", "fun.wmde.term");
 
         let search_items = collection.search_items(attributes).await?;
 
@@ -453,10 +453,10 @@ mod store {
         let collection = ss.get_default_collection().await?;
 
         let mut attributes = std::collections::HashMap::new();
-        attributes.insert("application", "com.system76.CosmicTerm");
+        attributes.insert("application", "fun.wmde.term");
         attributes.insert("identifier", &identifier);
 
-        let label = format!("CosmicTerm - {}", identifier);
+        let label = format!("WMDE Terminal - {}", identifier);
 
         collection
             .create_item(&label, attributes, password.as_bytes(), true, "text/plain")
@@ -469,7 +469,7 @@ mod store {
         let collection = ss.get_default_collection().await?;
 
         let mut attributes = std::collections::HashMap::new();
-        attributes.insert("application", "com.system76.CosmicTerm");
+        attributes.insert("application", "fun.wmde.term");
         attributes.insert("identifier", &identifier);
 
         let search_items = collection.search_items(attributes).await?;
@@ -486,7 +486,7 @@ mod store {
         let collection = ss.get_default_collection().await?;
 
         let mut attributes = std::collections::HashMap::new();
-        attributes.insert("application", "com.system76.CosmicTerm");
+        attributes.insert("application", "fun.wmde.term");
         attributes.insert("identifier", &identifier);
 
         let search_items = collection.search_items(attributes).await?;

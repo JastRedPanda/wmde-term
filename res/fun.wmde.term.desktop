@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=WMDE Terminal
+Comment=Terminal emulator for the WMDE desktop
+Exec=wmde-term
+Terminal=false
+Type=Application
+StartupNotify=true
+Icon=fun.wmde.term
+Categories=System;TerminalEmulator;
+Keywords=Command;Shell;Terminal;CLI;

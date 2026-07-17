@@ -108,7 +108,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some("--version") | Some("-V") => {
                 println!(
-                    "cosmic-term {}",
+                    "wmde-term {}",
                     env!("CARGO_PKG_VERSION"),
                 );
                 return Ok(());
@@ -219,13 +219,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn print_help() {
     println!(
-        r#"COSMIC Terminal
-Designed for the COSMIC™ desktop environment, cosmic-term is a libcosmic-based terminal emulator.
+        r#"WMDE Terminal
+Designed for the WMDE desktop, wmde-term is a libcosmic-based terminal emulator.
 
-Project home page: https://github.com/pop-os/cosmic-term
+Project home page: https://github.com/Lin-WMDE/wmde-term
 Options:
   --help                          Show this message
-  --version                       Show the version of cosmic-term
+  --version                       Show the version of wmde-term
   -w, --working-directory <dir>   Set the working directory for the terminal"#
     );
 }
@@ -908,7 +908,7 @@ impl App {
         );
 
         let mut section = widget::settings::section();
-        let builtin_name = format!("COSMIC {:?}", color_scheme_kind);
+        let builtin_name = format!("WMDE {:?}", color_scheme_kind);
         let color_scheme_names = self.config.color_scheme_names(color_scheme_kind);
         for (color_scheme_name, color_scheme_id_opt) in std::iter::once((builtin_name, None)).chain(
             color_scheme_names
@@ -1705,7 +1705,7 @@ impl Application for App {
     type Message = Message;
 
     /// The unique application ID to supply to the window manager.
-    const APP_ID: &'static str = "com.system76.CosmicTerm";
+    const APP_ID: &'static str = "fun.wmde.term";
 
     fn core(&self) -> &Core {
         &self.core
@@ -1834,16 +1834,16 @@ impl Application for App {
             .name(fl!("cosmic-terminal"))
             .icon(widget::icon::from_name(Self::APP_ID))
             .version(env!("CARGO_PKG_VERSION"))
-            .author("System76")
+            .author("WMDE")
             .comments(fl!("comment"))
             .license("GPL-3.0-only")
             .license_url("https://spdx.org/licenses/GPL-3.0-only")
             .developers([("Jeremy Soller", "jeremy@system76.com")])
             .links([
-                (fl!("repository"), "https://github.com/pop-os/cosmic-term"),
+                (fl!("repository"), "https://github.com/Lin-WMDE/wmde-term"),
                 (
                     fl!("support"),
-                    "https://github.com/pop-os/cosmic-term/issues",
+                    "https://github.com/Lin-WMDE/wmde-term/issues",
                 ),
             ]);
 
@@ -2002,7 +2002,7 @@ impl Application for App {
                         .color_schemes(color_scheme_kind)
                         .get(&color_scheme_id)
                         .map(|color_scheme| color_scheme.name.clone()),
-                    None => Some(format!("COSMIC {:?}", color_scheme_kind)),
+                    None => Some(format!("WMDE {:?}", color_scheme_kind)),
                 } && self.dialog_opt.is_none()
                 {
                     let (dialog, command) = Dialog::new(
@@ -2061,7 +2061,7 @@ impl Application for App {
                             }
                         }
                         None => {
-                            let name = format!("COSMIC {:?}", color_scheme_kind);
+                            let name = format!("WMDE {:?}", color_scheme_kind);
                             let color_scheme = match color_scheme_kind {
                                 ColorSchemeKind::Dark => ColorScheme::from((
                                     name.as_str(),
@@ -3440,7 +3440,7 @@ impl Application for App {
                 tab_column = tab_column.push(
                     widget::container(
                         widget::tab_bar::horizontal(tab_model)
-                            .enable_tab_drag(String::from("x-cosmic-term/tab"))
+                            .enable_tab_drag(String::from("x-wmde-term/tab"))
                             .on_reorder(move |event| Message::ReorderTab(pane, event))
                             .tab_drag_threshold(25.)
                             .button_height(32)
