@@ -100,7 +100,3 @@ libcosmic = { path = "../libcosmic" }
 cosmic-config = { path = "../libcosmic/cosmic-config" }
 cosmic-config-derive = { path = "../libcosmic/cosmic-config-derive" }
 cosmic-theme = { path = "../libcosmic/cosmic-theme" }
-
-# Shortcuts/WindowRules config crates come from the wmde-settings-daemon fork (fun.wmde.* ids).
-[patch."https://github.com/pop-os/cosmic-settings-daemon"]
-cosmic-settings-config = { path = "../wmde-settings-daemon/config" }
