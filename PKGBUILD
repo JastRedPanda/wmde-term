@@ -6,7 +6,7 @@
 # runtime package dep). build.rs/xdgen was dropped; res/ templates are installed directly.
 pkgname=wmde-term
 pkgver=1.3.0
-pkgrel=1
+pkgrel=2
 pkgdesc="WMDE Terminal - terminal emulator for the WMDE desktop (fork of cosmic-term)"
 arch=('x86_64')
 url="https://wmde.fun"
