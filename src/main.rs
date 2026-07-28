@@ -1717,6 +1717,16 @@ fn wmde_menubar(theme: &cosmic::Theme) -> Color {
     Color::from(theme.cosmic().primary(theme.transparent).base)
 }
 
+// WMDE: the new-tab button. It follows the tabs into the title bar, and falls back to the
+// right end of the header when the tabs are inside the panes.
+fn wmde_new_tab_button<'a>() -> Element<'a, Message> {
+    widget::button::custom(icon_cache_get("list-add-symbolic", 16))
+        .on_press(Message::TabNew)
+        .padding(8)
+        .class(style::Button::Icon)
+        .into()
+}
+
 // WMDE: container background helper for the menu row, which sits under the title bar.
 fn wmde_menubar_container() -> style::Container<'static> {
     style::Container::custom(|theme| cosmic::iced::widget::container::Style {
@@ -2272,7 +2282,11 @@ impl Application for App {
                             shortcuts::ShortcutsConfig::new(self.config.shortcuts_custom.clone());
                         self.key_binds = key_binds(&self.shortcuts_config);
                     }
-                    return self.update_config();
+                    let config_task = self.update_config();
+                    // WMDE: show_headerbar can flip here too (another window wrote the
+                    // config), and the title-bar tab strip - which carries the title - comes
+                    // and goes with it, so the centre title has to be recomputed.
+                    return Task::batch([config_task, self.update_title(None)]);
                 }
             }
             Message::Copy(entity_opt) => {
@@ -3495,11 +3509,7 @@ impl Application for App {
                     .on_close(|entity| Message::TabClose(Some(entity)))
                     .width(Length::Shrink)
                     .into(),
-                widget::button::custom(icon_cache_get("list-add-symbolic", 16))
-                    .on_press(Message::TabNew)
-                    .padding(8)
-                    .class(style::Button::Icon)
-                    .into(),
+                wmde_new_tab_button(),
             ])
             .align_y(Alignment::Center)
             .into(),
@@ -3507,8 +3517,13 @@ impl Application for App {
     }
 
     fn header_end(&self) -> Vec<Element<'_, Self::Message>> {
-        // WMDE: the new-tab button sits next to the tabs in header_start now
-        Vec::new()
+        // WMDE: the new-tab button rides with the tabs in header_start, so it is only needed
+        // here in the states that have no title-bar strip - a split window, where the tabs are
+        // back inside the panes and the button would otherwise have nowhere to live.
+        if self.wmde_tabs_in_header() {
+            return Vec::new();
+        }
+        vec![wmde_new_tab_button()]
     }
 
     fn on_close_requested(&self, id: window::Id) -> Option<Self::Message> {
