@@ -3268,7 +3268,18 @@ impl Application for App {
                                 tab_model.text_set(entity, title);
                             }
                         }
-                        return self.update_title(Some(pane));
+                        // WMDE: only the tab the user is actually looking at may rename the
+                        // window. A shell in a background pane - or in a background tab of this
+                        // one - emitting an OSC title used to take over the whole window title
+                        // and the taskbar entry. Its own tab label is already updated above.
+                        let names_the_window = pane == self.pane_model.focused()
+                            && self
+                                .pane_model
+                                .active()
+                                .is_some_and(|tab_model| tab_model.active() == entity);
+                        if names_the_window {
+                            return self.update_title(Some(pane));
+                        }
                     }
                     TermEvent::MouseCursorDirty | TermEvent::Wakeup => {
                         if let Some(tab_model) = self.pane_model.panes.get(pane)
