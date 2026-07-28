@@ -3640,7 +3640,13 @@ impl Application for App {
             return widget::space::horizontal().into();
         };
 
-        let pane_grid = PaneGrid::new(&active_tab.panes, |pane, terminal, _is_maximized| {
+        // WMDE: a tab holding more than one terminal outlines each of them, so the split is
+        // visible at rest. iced draws a divider only while the cursor is over it, and the
+        // surface behind the grid is the same near black as the terminal, so without this the
+        // panes just butt together with no seam.
+        let split = active_tab.panes.panes.len() > 1;
+
+        let pane_grid = PaneGrid::new(&active_tab.panes, move |pane, terminal, _is_maximized| {
             let mut tab_column = widget::column::with_capacity(1);
 
             let terminal_id = active_tab
@@ -3775,7 +3781,31 @@ impl Application for App {
                 // TODO
             }
 
-            DndDestination::for_data::<DndDrop>(tab_column, move |data, action| {
+            let pane_content: Element<'_, Message> = if split {
+                widget::container(tab_column)
+                    .padding(1)
+                    .class(style::Container::custom(|theme| {
+                        cosmic::iced::widget::container::Style {
+                            border: iced::Border {
+                                color: Color::from(
+                                    theme.cosmic().background(theme.transparent).divider,
+                                ),
+                                width: 1.0,
+                                radius: 0.0.into(),
+                            },
+                            // WMDE: a 1px rule has to land on one pixel row, see the menu strip.
+                            snap: true,
+                            ..Default::default()
+                        }
+                    }))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into()
+            } else {
+                tab_column.into()
+            };
+
+            DndDestination::for_data::<DndDrop>(pane_content, move |data, action| {
                 if let Some(data) = data {
                     if action == DndAction::Move {
                         Message::Drop(Some((pane, data)))
