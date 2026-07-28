@@ -441,6 +441,11 @@ pub enum Message {
     TabActivate(segmented_button::Entity),
     TabActivateJump(usize),
     TabClose(Option<segmented_button::Entity>),
+    // WMDE: a tab clicked in a pane's own strip. TabActivate/TabClose act on the FOCUSED pane,
+    // so a click in any other pane would be applied to the wrong model and silently do nothing.
+    // These carry the pane the strip belongs to and focus it first.
+    PaneTabActivate(Pane, segmented_button::Entity),
+    PaneTabClose(Pane, segmented_button::Entity),
     TabContextAction(segmented_button::Entity, Action),
     TabContextMenu(pane_grid::Pane, Option<MenuState>),
     TabNew,
@@ -792,12 +797,13 @@ impl App {
         }
     }
 
-    // WMDE: browser-style tabs live in the title bar, like wmde-files, but only while the
-    // window is a single pane. A split gives every pane its own tab set and there is just one
-    // title bar, so the strips move back into the panes and it stays clear whose tabs are
-    // whose. With the header bar hidden there is nowhere to put them either.
+    // WMDE: browser-style tabs live in the title bar, like wmde-files. They always show the
+    // FOCUSED pane's tabs, including in a split window: letting them jump back into the panes
+    // on a split made the strip appear inside one pane only, pushing that pane's terminal down
+    // while its neighbour started at the top - the panes visibly came apart. Only a hidden
+    // header bar leaves them nowhere to go, and then each pane draws its own strip again.
     fn wmde_tabs_in_header(&self) -> bool {
-        self.core.window.show_headerbar && self.pane_model.panes.iter().count() == 1
+        self.core.window.show_headerbar
     }
 
     // Call this any time the tab changes
@@ -2926,6 +2932,17 @@ impl Application for App {
                 }
                 return self.update_title(None);
             }
+            // WMDE: clicking a tab in a pane's strip focuses that pane first - otherwise the
+            // entity is looked up in whichever pane happens to hold focus, where it does not
+            // exist, and the click does nothing at all.
+            Message::PaneTabActivate(pane, entity) => {
+                self.pane_model.set_focus(pane);
+                return self.update(Message::TabActivate(entity));
+            }
+            Message::PaneTabClose(pane, entity) => {
+                self.pane_model.set_focus(pane);
+                return self.update(Message::TabClose(Some(entity)));
+            }
             Message::TabActivateJump(pos) => {
                 if let Some(tab_model) = self.pane_model.active() {
                     // Length is always at least one so there shouldn't be a division by zero
@@ -3496,8 +3513,9 @@ impl Application for App {
     }
 
     fn header_start(&self) -> Vec<Element<'_, Self::Message>> {
-        // WMDE: browser-style tabs at the left of the CSD title bar (Win11-like). The menu
-        // moved to a strip of its own below.
+        // WMDE: browser-style tabs at the left of the CSD title bar (Win11-like), always the
+        // focused pane's. The menu moved to a strip of its own below. TabActivate/TabClose act
+        // on the focused pane, which is exactly the pane these tabs belong to.
         if !self.wmde_tabs_in_header() {
             return Vec::new();
         }
@@ -3542,8 +3560,7 @@ impl Application for App {
 
     fn header_end(&self) -> Vec<Element<'_, Self::Message>> {
         // WMDE: the new-tab button rides with the tabs in header_start, so it is only needed
-        // here in the states that have no title-bar strip - a split window, where the tabs are
-        // back inside the panes and the button would otherwise have nowhere to live.
+        // here when there is no title-bar strip at all.
         if self.wmde_tabs_in_header() {
             return Vec::new();
         }
@@ -3582,8 +3599,8 @@ impl Application for App {
         let cosmic = t.cosmic();
         let cosmic_theme::Spacing { space_xxs, .. } = cosmic.spacing;
 
-        // WMDE: with a single pane the tabs are up in the title bar, so the per-pane strip is
-        // only drawn for split windows (and when the header bar is hidden entirely).
+        // WMDE: the tabs live in the title bar, so a pane draws its own strip only when there
+        // is no header bar to hold them.
         let tabs_in_header = self.wmde_tabs_in_header();
 
         let pane_grid = PaneGrid::new(&self.pane_model.panes, |pane, tab_model, _is_maximized| {
@@ -3599,8 +3616,8 @@ impl Application for App {
                             .button_height(32)
                             .button_spacing(space_xxs)
                             .style(wmde_tab_style())
-                            .on_activate(Message::TabActivate)
-                            .on_close(|entity| Message::TabClose(Some(entity))),
+                            .on_activate(move |entity| Message::PaneTabActivate(pane, entity))
+                            .on_close(move |entity| Message::PaneTabClose(pane, entity)),
                     )
                     .class(style::Container::Custom(Box::new(|theme| {
                         let cosmic = theme.cosmic();
