@@ -1754,15 +1754,24 @@ fn wmde_menubar_container() -> style::Container<'static> {
 // WMDE: Win11-style tabs - the active tab uses the menu-row color so it connects to the strip
 // below it, rounded only on top, no accent underline, neutral text. Shared by the title-bar
 // strip and the per-pane strip so a split window looks the same as a plain one.
-fn wmde_tab_style() -> style::SegmentedButton {
+fn wmde_tab_style(in_pane: bool) -> style::SegmentedButton {
     use cosmic::widget::segmented_button::{Appearance, ItemAppearance, ItemStatusAppearance};
-    style::SegmentedButton::Custom(Box::new(|theme| {
+    style::SegmentedButton::Custom(Box::new(move |theme| {
         let cosmic = theme.cosmic();
         let rad = cosmic.corner_radii.radius_s;
         let top_round = iced::border::Radius::from([rad[0], rad[1], 0.0, 0.0]);
         let body = wmde_menubar(theme);
         let on = Color::from(cosmic.background(theme.transparent).on);
-        let on_dim = Color::from(cosmic.background(theme.transparent).component.on);
+        // WMDE: nudge the fill towards the text colour - lighter in a dark theme, darker in a
+        // light one. A translucent copy of the fill would have made the ACTIVE tab look weaker
+        // under the cursor, because libcosmic draws the hover appearance instead of the active
+        // one for whichever tab is hovered, active or not.
+        let toward_ink = |t: f32| Color {
+            r: body.r + (on.r - body.r) * t,
+            g: body.g + (on.g - body.g) * t,
+            b: body.b + (on.b - body.b) * t,
+            a: 1.0,
+        };
         let item = |radius| ItemAppearance {
             border: iced::Border {
                 radius,
@@ -1779,20 +1788,27 @@ fn wmde_tab_style() -> style::SegmentedButton {
         Appearance {
             background: None,
             border: iced::Border::default(),
-            active_width: 0.0,
+            // WMDE: in the title bar the active tab is read by merging into the menu row painted
+            // the same colour, so an underline there would only draw a line across that seam.
+            // A strip inside a pane has no such neighbour - primary.base on background.base is a
+            // 1.2:1 step - so it keeps the toolkit's hint, which is drawn in the item's text
+            // colour, i.e. neutral here rather than the accent.
+            active_width: if in_pane { 4.0 } else { 0.0 },
             active,
             inactive: ItemStatusAppearance {
                 background: None,
-                text_color: on_dim,
+                // WMDE: dim the same ink rather than switch to component.on, which is DARKER
+                // than background.on in the light palette and inverted the emphasis there.
+                text_color: Color { a: 0.65, ..on },
                 ..active
             },
             hover: ItemStatusAppearance {
-                background: Some(iced::Background::Color(Color { a: 0.5, ..body })),
+                background: Some(iced::Background::Color(toward_ink(0.10))),
                 text_color: on,
                 ..active
             },
             pressed: ItemStatusAppearance {
-                background: Some(iced::Background::Color(body)),
+                background: Some(iced::Background::Color(toward_ink(0.16))),
                 text_color: on,
                 ..active
             },
@@ -3537,7 +3553,7 @@ impl Application for App {
                         widget::tab_bar::horizontal(tab_model)
                             .button_height(32)
                             .button_spacing(space_xxs)
-                            .style(wmde_tab_style())
+                            .style(wmde_tab_style(false))
                             .enable_tab_drag(String::from("x-wmde-term/tab"))
                             .on_reorder(move |event| Message::ReorderTab(pane, event))
                             .tab_drag_threshold(25.)
@@ -3559,12 +3575,10 @@ impl Application for App {
     }
 
     fn header_end(&self) -> Vec<Element<'_, Self::Message>> {
-        // WMDE: the new-tab button rides with the tabs in header_start, so it is only needed
-        // here when there is no title-bar strip at all.
-        if self.wmde_tabs_in_header() {
-            return Vec::new();
-        }
-        vec![wmde_new_tab_button()]
+        // WMDE: the new-tab button rides with the tabs in header_start. There is no state left
+        // where it belongs here: the only reason the title bar carries no tabs is that there is
+        // no title bar, and then this region is never drawn either.
+        Vec::new()
     }
 
     fn on_close_requested(&self, id: window::Id) -> Option<Self::Message> {
@@ -3615,7 +3629,7 @@ impl Application for App {
                             .tab_drag_threshold(25.)
                             .button_height(32)
                             .button_spacing(space_xxs)
-                            .style(wmde_tab_style())
+                            .style(wmde_tab_style(true))
                             .on_activate(move |entity| Message::PaneTabActivate(pane, entity))
                             .on_close(move |entity| Message::PaneTabClose(pane, entity)),
                     )
