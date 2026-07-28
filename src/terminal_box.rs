@@ -561,6 +561,14 @@ where
                                         self.view_position + $pos_offset,
                                         Size::new($width, $style_line_height),
                                     ),
+                                    // WMDE: cell heights are fractional, so consecutive rows
+                                    // ended on part-covered pixel rows and the terminal's own
+                                    // background bled through as a hairline across every filled
+                                    // background - visible as stripes over a full-screen TUI
+                                    // like mc. Snapped, each row rounds to whole pixels and the
+                                    // rows tile exactly. Also keeps underlines and strikeouts,
+                                    // built by this same macro, on one pixel row.
+                                    snap: true,
                                     ..Default::default()
                                 }
                             };
@@ -816,6 +824,8 @@ where
                     CursorShape::Beam => {
                         let quad = Quad {
                             bounds: Rectangle::new(top_left, Size::new(1.0, height)),
+                            // WMDE: thin shapes snap, like every other rule in the stack.
+                            snap: true,
                             ..Default::default()
                         };
                         renderer.fill_quad(quad, color);
@@ -830,6 +840,7 @@ where
                                     ),
                                 Size::new(width, 1.0),
                             ),
+                            snap: true,
                             ..Default::default()
                         };
                         renderer.fill_quad(quad, color);
@@ -842,6 +853,7 @@ where
                                 color,
                                 ..Default::default()
                             },
+                            snap: true,
                             ..Default::default()
                         };
                         renderer.fill_quad(quad, Color::TRANSPARENT);
@@ -854,6 +866,7 @@ where
                                 color,
                                 ..Default::default()
                             },
+                            snap: true,
                             ..Default::default()
                         };
                         renderer.fill_quad(quad, Color::TRANSPARENT);
