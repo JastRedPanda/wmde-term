@@ -1,4 +1,4 @@
-wmde-terminal = कॉस्मिक टर्मिनल
+wmde-terminal = WMDE टर्मिनल
 new-terminal = नया टर्मिनल
 
 ## About
@@ -105,6 +105,6 @@ split-vertical = लंबवत विभाजन
 pane-toggle-maximize = अधिकतम करें
 menu-color-schemes = रंग योजनाएँ...
 menu-settings = सेटिंग्स...
-menu-about = कॉस्मिक टर्मिनल के बारे में...
+menu-about = WMDE टर्मिनल के बारे में...
 repository = रिपॉजिटरी
 support = सहायता
