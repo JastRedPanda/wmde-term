@@ -31,7 +31,7 @@ use std::{
     path::PathBuf,
     sync::{
         Arc, Mutex, Weak,
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicU32, AtomicU64, Ordering},
     },
     time::Instant,
 };
@@ -94,17 +94,29 @@ impl From<Size> for WindowSize {
     }
 }
 
+/// WMDE: a terminal's own identity, stable for its whole life.
+///
+/// Events used to be addressed by the terminal's position - (pane, tab) - which worked only
+/// while there was a single pane grid in the process. Now that every tab owns its own grid,
+/// `pane_grid::Pane` ids restart at 0 per tab, so a position is ambiguous: an event from tab 2's
+/// first pane would resolve against tab 1's. It also could not be produced up front, because
+/// `pane_grid::State::new` hands back the `Pane` only after it has taken the terminal. An id
+/// assigned at construction sidesteps both, and survives splits, drags and tab reordering.
+pub type TerminalId = u64;
+
+static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_terminal_id() -> TerminalId {
+    NEXT_TERMINAL_ID.fetch_add(1, Ordering::SeqCst)
+}
+
 #[derive(Clone)]
-pub struct EventProxy(
-    pane_grid::Pane,
-    segmented_button::Entity,
-    mpsc::UnboundedSender<(pane_grid::Pane, segmented_button::Entity, Event)>,
-);
+pub struct EventProxy(TerminalId, mpsc::UnboundedSender<(TerminalId, Event)>);
 
 impl EventListener for EventProxy {
     fn send_event(&self, event: Event) {
         //TODO: handle error
-        let _ = self.2.send((self.0, self.1, event));
+        let _ = self.1.send((self.0, event));
     }
 }
 
@@ -151,59 +163,78 @@ fn convert_color(colors: &Colors, color: Color) -> cosmic_text::Color {
     cosmic_text::Color::rgb(rgb.r, rgb.g, rgb.b)
 }
 
-type TabModel = segmented_button::Model<segmented_button::SingleSelect>;
+pub type TabModel = segmented_button::Model<segmented_button::SingleSelect>;
 
-pub struct TerminalPaneGrid {
-    pub panes: pane_grid::State<TabModel>,
-    pub panes_created: usize,
+/// WMDE: one tab owns a whole layout of terminals.
+///
+/// Upstream has this the other way round - the pane grid is the top level and every pane carries
+/// its own set of tabs - so "new tab" adds a tab inside whichever split holds focus instead of
+/// opening a fresh, unsplit terminal, and switching tabs changes only that one split. Here a tab
+/// is the layout: splitting divides the current tab, a new tab starts as a single terminal, and
+/// switching tabs swaps the whole arrangement.
+pub struct TerminalTab {
+    pub panes: pane_grid::State<Mutex<Terminal>>,
+    /// The text widget id of each terminal, so focus can be handed to the right one.
+    pub terminal_ids: HashMap<pane_grid::Pane, cosmic::widget::Id>,
     focus: pane_grid::Pane,
 }
 
-impl TerminalPaneGrid {
-    pub fn new(model: TabModel) -> Self {
-        let (panes, pane) = pane_grid::State::new(model);
+impl TerminalTab {
+    pub fn new(terminal: Terminal) -> Self {
+        let (panes, pane) = pane_grid::State::new(Mutex::new(terminal));
         let mut terminal_ids = HashMap::new();
         terminal_ids.insert(pane, cosmic::widget::Id::unique());
 
         Self {
             panes,
-            panes_created: 1,
+            terminal_ids,
             focus: pane,
         }
     }
-    pub fn active(&self) -> Option<&TabModel> {
-        self.panes.get(self.focus)
-    }
-    pub fn active_mut(&mut self) -> Option<&mut TabModel> {
-        self.panes.get_mut(self.focus)
-    }
-    pub fn set_focus(&mut self, pane: pane_grid::Pane) {
-        self.focus = pane;
-        self.update_terminal_focus();
-    }
+
     pub fn focused(&self) -> pane_grid::Pane {
         self.focus
     }
 
-    pub fn update_terminal_focus(&self) {
-        for (pane, tab_model) in self.panes.panes.iter() {
-            let entity = tab_model.active();
-            if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                let mut terminal = terminal.lock().unwrap();
-                terminal.set_focused(self.focus == *pane);
-                terminal.update();
-            }
+    pub fn set_focus(&mut self, pane: pane_grid::Pane) {
+        self.focus = pane;
+        self.update_terminal_focus(true);
+    }
+
+    /// The terminal of the focused pane.
+    pub fn active(&self) -> Option<&Mutex<Terminal>> {
+        self.panes.get(self.focus)
+    }
+
+    pub fn terminal_id(&self, pane: pane_grid::Pane) -> Option<cosmic::widget::Id> {
+        self.terminal_ids.get(&pane).cloned()
+    }
+
+    pub fn focused_terminal_id(&self) -> Option<cosmic::widget::Id> {
+        self.terminal_id(self.focus)
+    }
+
+    /// Register a pane created by a split, so it renders into its own text widget.
+    pub fn insert_terminal_id(&mut self, pane: pane_grid::Pane) {
+        self.terminal_ids.insert(pane, cosmic::widget::Id::unique());
+    }
+
+    pub fn remove_terminal_id(&mut self, pane: pane_grid::Pane) {
+        self.terminal_ids.remove(&pane);
+    }
+
+    /// `tab_is_active` is false for every tab the user is not looking at, so a background tab
+    /// never draws a focused cursor.
+    pub fn update_terminal_focus(&self, tab_is_active: bool) {
+        for (pane, terminal) in self.panes.panes.iter() {
+            let mut terminal = terminal.lock().unwrap();
+            terminal.set_focused(tab_is_active && self.focus == *pane);
+            terminal.update();
         }
     }
+
     pub fn unfocus_all_terminals(&self) {
-        for (_pane, tab_model) in self.panes.panes.iter() {
-            let entity = tab_model.active();
-            if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                let mut terminal = terminal.lock().unwrap();
-                terminal.set_focused(false);
-                terminal.update();
-            }
-        }
+        self.update_terminal_focus(false);
     }
 }
 
@@ -261,15 +292,14 @@ pub struct Terminal {
     size: Size,
     use_bright_bold: bool,
     zoom_adj: i8,
+    id: TerminalId,
 }
 
 impl Terminal {
     //TODO: error handling
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        pane: pane_grid::Pane,
-        entity: segmented_button::Entity,
-        event_tx: mpsc::UnboundedSender<(pane_grid::Pane, segmented_button::Entity, Event)>,
+        event_tx: mpsc::UnboundedSender<(TerminalId, Event)>,
         config: Config,
         options: Options,
         app_config: &AppConfig,
@@ -321,7 +351,8 @@ impl Terminal {
             cell_width,
             cell_height,
         };
-        let event_proxy = EventProxy(pane, entity, event_tx);
+        let id = next_terminal_id();
+        let event_proxy = EventProxy(id, event_tx);
         let term = Arc::new(FairMutex::new(Term::new(
             config,
             &size,
@@ -365,7 +396,13 @@ impl Terminal {
             use_bright_bold,
             zoom_adj: Default::default(),
             is_focused: true,
+            id,
         })
+    }
+
+    /// WMDE: this terminal's stable identity, used to route its events.
+    pub fn id(&self) -> TerminalId {
+        self.id
     }
 
     pub fn buffer_weak(&self) -> Weak<Buffer> {

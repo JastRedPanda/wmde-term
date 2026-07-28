@@ -7,7 +7,6 @@ use cosmic::iced::core::keyboard::key::Named;
 use cosmic::iced::keyboard::key::Physical;
 use cosmic::widget::menu::action::MenuAction;
 use cosmic::widget::menu::key_bind::KeyBind;
-use cosmic::widget::pane_grid::Pane;
 use cosmic::widget::segmented_button::ReorderEvent;
 use cosmic::{
     Application, ApplicationExt, Element, action,
@@ -37,7 +36,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     env,
     error::Error,
-    fs,
+    fs, io,
     path::PathBuf,
     process,
     rc::Rc,
@@ -65,7 +64,7 @@ mod localize;
 use menu::menu_bar;
 mod menu;
 
-use terminal::{Terminal, TerminalPaneGrid, TerminalScroll};
+use terminal::{TabModel, Terminal, TerminalScroll, TerminalTab};
 mod terminal;
 
 use terminal_box::terminal_box;
@@ -386,12 +385,12 @@ pub enum Message {
     DefaultFontWeight(usize),
     DefaultZoomStep(usize),
     DialogMessage(Box<DialogMessage>), // DialogMessage is huge, so we use a box to make the size of this enum smaller on the stack
-    Drop(Option<(pane_grid::Pane, segmented_button::Entity, DndDrop)>),
+    Drop(Option<(pane_grid::Pane, DndDrop)>),
     Find(bool),
     FindNext,
     FindPrevious,
     FindSearchValueChanged(String),
-    MiddleClick(pane_grid::Pane, Option<segmented_button::Entity>),
+    MiddleClick(pane_grid::Pane),
     FocusFollowMouse(bool),
     Key(Modifiers, Physical, Key),
     LaunchUrl(String),
@@ -430,7 +429,7 @@ pub enum Message {
     ProfileRemove(ProfileId),
     ProfileSyntaxTheme(ProfileId, ColorSchemeKind, usize),
     ProfileTabTitle(ProfileId, String),
-    ReorderTab(Pane, ReorderEvent),
+    ReorderTab(ReorderEvent),
     Surface(surface::Action),
     SelectAll(Option<segmented_button::Entity>),
     ShowAdvancedFontSettings(bool),
@@ -444,16 +443,14 @@ pub enum Message {
     // WMDE: a tab clicked in a pane's own strip. TabActivate/TabClose act on the FOCUSED pane,
     // so a click in any other pane would be applied to the wrong model and silently do nothing.
     // These carry the pane the strip belongs to and focus it first.
-    PaneTabActivate(Pane, segmented_button::Entity),
-    PaneTabClose(Pane, segmented_button::Entity),
     TabContextAction(segmented_button::Entity, Action),
     TabContextMenu(pane_grid::Pane, Option<MenuState>),
     TabNew,
     TabNewNoProfile,
     TabNext,
     TabPrev,
-    TermEvent(pane_grid::Pane, segmented_button::Entity, TermEvent),
-    TermEventTx(mpsc::UnboundedSender<(pane_grid::Pane, segmented_button::Entity, TermEvent)>),
+    TermEvent(terminal::TerminalId, TermEvent),
+    TermEventTx(mpsc::UnboundedSender<(terminal::TerminalId, TermEvent)>),
     ToggleFullscreen,
     ToggleContextPage(ContextPage),
     UpdateDefaultProfile((bool, ProfileId)),
@@ -486,11 +483,31 @@ struct ShortcutConflict {
     new_action: shortcuts::KeyBindAction,
 }
 
+// WMDE: why a terminal could not be created. build_terminal is shared by "new tab" and
+// "split", and only the profile case has a fallback, so the reason has to survive the call.
+#[derive(Debug)]
+enum TerminalSpawn {
+    NoChannel,
+    NoColors,
+    Failed(io::Error),
+}
+
+impl std::fmt::Display for TerminalSpawn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoChannel => f.write_str("the terminal event channel is not up yet"),
+            Self::NoColors => f.write_str("no terminal color scheme could be resolved"),
+            Self::Failed(err) => write!(f, "{err}"),
+        }
+    }
+}
+
 /// The [`App`] stores application-specific state.
 pub struct App {
     core: Core,
     about: About,
-    pane_model: TerminalPaneGrid,
+    /// WMDE: top-level tabs; each tab's data is a TerminalTab holding that tab's pane layout.
+    tab_model: TabModel,
     config_handler: Option<cosmic_config::Config>,
     config: Config,
     shortcuts_config: shortcuts::ShortcutsConfig,
@@ -513,12 +530,10 @@ pub struct App {
     themes: HashMap<(String, ColorSchemeKind), TermColors>,
     context_page: ContextPage,
     dialog_opt: Option<Dialog<Message>>,
-    terminal_ids: HashMap<pane_grid::Pane, widget::Id>,
     find: bool,
     find_search_id: widget::Id,
     find_search_value: String,
-    term_event_tx_opt:
-        Option<mpsc::UnboundedSender<(pane_grid::Pane, segmented_button::Entity, TermEvent)>>,
+    term_event_tx_opt: Option<mpsc::UnboundedSender<(terminal::TerminalId, TermEvent)>>,
     startup_options: Option<tty::Options>,
     term_config: term::Config,
     color_scheme_errors: Vec<String>,
@@ -601,26 +616,151 @@ impl App {
             .sort_by(|a, b| LANGUAGE_SORTER.compare(a, b));
     }
 
-    fn reset_terminal_panes_zoom(&mut self) {
-        for (_pane, tab_model) in self.pane_model.panes.iter() {
-            for entity in tab_model.iter() {
-                if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                    let mut terminal = terminal.lock().unwrap();
-                    terminal.set_zoom_adj(0);
+    // WMDE: accessors for the tabs-own-panes model. A tab's data is its whole pane layout, so
+    // "the current terminal" is the focused pane of the active tab.
+    fn tab(&self, entity: segmented_button::Entity) -> Option<&TerminalTab> {
+        self.tab_model.data::<TerminalTab>(entity)
+    }
+
+    fn tab_mut(&mut self, entity: segmented_button::Entity) -> Option<&mut TerminalTab> {
+        self.tab_model.data_mut::<TerminalTab>(entity)
+    }
+
+    fn active_tab(&self) -> Option<&TerminalTab> {
+        self.tab_model.active_data::<TerminalTab>()
+    }
+
+    fn active_tab_mut(&mut self) -> Option<&mut TerminalTab> {
+        self.tab_model.active_data_mut::<TerminalTab>()
+    }
+
+    fn active_terminal(&self) -> Option<&Mutex<Terminal>> {
+        self.active_tab()?.active()
+    }
+
+    fn terminal(
+        &self,
+        entity: segmented_button::Entity,
+        pane: pane_grid::Pane,
+    ) -> Option<&Mutex<Terminal>> {
+        self.tab(entity)?.panes.get(pane)
+    }
+
+    /// WMDE: where a terminal lives right now. Its id is stable, its address is not - splitting,
+    /// dragging a pane or closing a sibling all renumber panes within a tab.
+    fn find_terminal(
+        &self,
+        terminal_id: terminal::TerminalId,
+    ) -> Option<(segmented_button::Entity, pane_grid::Pane)> {
+        for entity in self.tab_model.iter() {
+            let Some(tab) = self.tab(entity) else { continue };
+            for (pane, terminal) in tab.panes.panes.iter() {
+                if terminal.lock().unwrap().id() == terminal_id {
+                    return Some((entity, *pane));
                 }
+            }
+        }
+        None
+    }
+
+    /// Whether this pane is the one whose title names its tab - a tab is named by the terminal
+    /// the user is looking at inside it, not by whichever split last printed a title.
+    fn names_the_tab(&self, entity: segmented_button::Entity, pane: pane_grid::Pane) -> bool {
+        self.tab(entity).is_some_and(|tab| tab.focused() == pane)
+    }
+
+    /// Close one terminal. The cascade is pane -> tab -> window: the tab goes when its last pane
+    /// does, and the window when its last tab does.
+    fn close_pane(
+        &mut self,
+        entity: segmented_button::Entity,
+        pane: pane_grid::Pane,
+    ) -> Task<Message> {
+        let mut tab_emptied = false;
+        if let Some(tab) = self.tab_mut(entity) {
+            match tab.panes.close(pane) {
+                Some((_terminal, sibling)) => {
+                    tab.remove_terminal_id(pane);
+                    tab.set_focus(sibling);
+                }
+                None => tab_emptied = true,
+            }
+        }
+        if tab_emptied {
+            return self.close_tab(entity);
+        }
+        self.update_title()
+    }
+
+    /// Close a whole tab, and with it every terminal in its layout.
+    fn close_tab(&mut self, entity: segmented_button::Entity) -> Task<Message> {
+        // Activate the closest tab if the active one is going away.
+        if entity == self.tab_model.active()
+            && let Some(position) = self.tab_model.position(entity)
+        {
+            if position > 0 {
+                self.tab_model.activate_position(position - 1);
+            } else {
+                self.tab_model.activate_position(position + 1);
+            }
+        }
+        self.tab_model.remove(entity);
+
+        if self.tab_model.iter().next().is_none() {
+            if let Some(window_id) = self.core.main_window_id() {
+                return window::close(window_id);
+            }
+        }
+        self.update_title()
+    }
+
+    /// WMDE: only the tab on screen may show a focused terminal; every background tab's
+    /// terminals draw an unfocused cursor.
+    fn refresh_terminal_focus(&self) {
+        let active = self.tab_model.active();
+        for entity in self.tab_model.iter() {
+            if let Some(tab) = self.tab(entity) {
+                tab.update_terminal_focus(entity == active);
             }
         }
     }
 
+    /// WMDE: give a pane of the active tab the focus. Only the active tab is rendered, so any
+    /// pane the user can click is in it.
+    fn focus_pane(&mut self, pane: pane_grid::Pane) {
+        if let Some(tab) = self.active_tab_mut() {
+            tab.set_focus(pane);
+        }
+    }
+
+    /// WMDE: the terminal an action applies to - the focused pane of the addressed tab, or of
+    /// the active tab when the action carries no tab of its own.
+    fn terminal_for_action(
+        &self,
+        entity_opt: Option<segmented_button::Entity>,
+    ) -> Option<&Mutex<Terminal>> {
+        let entity = entity_opt.unwrap_or_else(|| self.tab_model.active());
+        self.tab(entity)?.active()
+    }
+
+    /// Every terminal in every tab.
+    fn all_terminals(&self) -> impl Iterator<Item = &Mutex<Terminal>> {
+        self.tab_model
+            .iter()
+            .filter_map(|entity| self.tab(entity))
+            .flat_map(|tab| tab.panes.panes.values())
+    }
+
+    fn reset_terminal_panes_zoom(&mut self) {
+        for terminal in self.all_terminals() {
+            let mut terminal = terminal.lock().unwrap();
+            terminal.set_zoom_adj(0);
+        }
+    }
+
     fn reset_active_pane_zoom(&mut self) {
-        if let Some(tab_model) = self.pane_model.active() {
-            for entity in tab_model.iter() {
-                if tab_model.is_active(entity)
-                    && let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity)
-                {
-                    terminal.lock().unwrap().set_zoom_adj(0);
-                }
-            }
+        if let Some(terminal) = self.active_terminal() {
+            terminal.lock().unwrap().set_zoom_adj(0);
         }
     }
 
@@ -700,13 +840,9 @@ impl App {
 
         // Set config of all tabs
         let color_scheme_kind = self.config.color_scheme_kind(&theme);
-        for (_pane, tab_model) in self.pane_model.panes.iter() {
-            for entity in tab_model.iter() {
-                if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                    let mut terminal = terminal.lock().unwrap();
-                    terminal.set_config(&self.config, color_scheme_kind, &self.themes);
-                }
-            }
+        for terminal in self.all_terminals() {
+            let mut terminal = terminal.lock().unwrap();
+            terminal.set_config(&self.config, color_scheme_kind, &self.themes);
         }
 
         // Set headerbar state
@@ -721,25 +857,15 @@ impl App {
         // recalculate the pane due to the changes of zoom_adj value
         // but only for the active pane/tab
         let color_scheme_kind = self.config.color_scheme_kind(self.core.system_theme());
-        if let Some(tab_model) = self.pane_model.active() {
-            for entity in tab_model.iter() {
-                if tab_model.is_active(entity)
-                    && let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity)
-                {
-                    let mut terminal = terminal.lock().unwrap();
-                    let current_zoom_adj = terminal.zoom_adj();
-                    match zoom_message {
-                        Message::ZoomIn => {
-                            terminal.set_zoom_adj(current_zoom_adj.saturating_add(1))
-                        }
-                        Message::ZoomOut => {
-                            terminal.set_zoom_adj(current_zoom_adj.saturating_sub(1))
-                        }
-                        _ => {}
-                    }
-                    terminal.set_config(&self.config, color_scheme_kind, &self.themes);
-                }
+        if let Some(terminal) = self.active_terminal() {
+            let mut terminal = terminal.lock().unwrap();
+            let current_zoom_adj = terminal.zoom_adj();
+            match zoom_message {
+                Message::ZoomIn => terminal.set_zoom_adj(current_zoom_adj.saturating_add(1)),
+                Message::ZoomOut => terminal.set_zoom_adj(current_zoom_adj.saturating_sub(1)),
+                _ => {}
             }
+            terminal.set_config(&self.config, color_scheme_kind, &self.themes);
         }
         Task::none()
     }
@@ -789,7 +915,8 @@ impl App {
             }
 
             Task::none()
-        } else if let Some(terminal_id) = self.terminal_ids.get(&self.pane_model.focused()).cloned()
+        } else if let Some(terminal_id) =
+            self.active_tab().and_then(TerminalTab::focused_terminal_id)
         {
             widget::text_input::focus(terminal_id)
         } else {
@@ -797,53 +924,41 @@ impl App {
         }
     }
 
-    // WMDE: browser-style tabs live in the title bar, like wmde-files. They always show the
-    // FOCUSED pane's tabs, including in a split window: letting them jump back into the panes
-    // on a split made the strip appear inside one pane only, pushing that pane's terminal down
-    // while its neighbour started at the top - the panes visibly came apart. Only a hidden
-    // header bar leaves them nowhere to go, and then each pane draws its own strip again.
+    // WMDE: browser-style tabs live in the title bar, like wmde-files. A tab is a whole layout
+    // of terminals, so the strip lists the tabs themselves and a split never disturbs it. Only a
+    // hidden header bar leaves them nowhere to go, and then the strip moves into the body.
     fn wmde_tabs_in_header(&self) -> bool {
         self.core.window.show_headerbar
     }
 
-    // Call this any time the tab changes
-    fn update_title(&mut self, pane: Option<pane_grid::Pane>) -> Task<Message> {
-        let pane = pane.unwrap_or(self.pane_model.focused());
-        if let Some(tab_model) = self.pane_model.panes.get(pane) {
-            let (header_title, window_title) = match tab_model.text(tab_model.active()) {
-                Some(tab_title) => (
-                    tab_title.to_string(),
-                    format!("{tab_title} — {}", fl!("wmde-terminal")),
-                ),
-                None => (String::new(), fl!("wmde-terminal")),
-            };
-            // WMDE: the title-bar tab already carries this text, so the centre title would
-            // only repeat it. The window title (taskbar, window list) is unaffected.
-            let header_title = if self.wmde_tabs_in_header() {
-                String::new()
-            } else {
-                header_title
-            };
-            self.set_header_title(header_title);
-            Task::batch([
-                if let Some(window_id) = self.core.main_window_id() {
-                    self.set_window_title(window_title, window_id)
-                } else {
-                    Task::none()
-                },
-                self.update_focus(),
-            ])
+    // Call this any time the tab changes.
+    // WMDE: the window is named by the ACTIVE TAB, whose own label follows the focused pane of
+    // that tab (see TermEvent::Title). Tabs own layouts now, so there is no pane to pass in.
+    fn update_title(&mut self) -> Task<Message> {
+        let tab_title = self
+            .tab_model
+            .text(self.tab_model.active())
+            .map(str::to_string);
+        let window_title = match &tab_title {
+            Some(tab_title) => format!("{tab_title} — {}", fl!("wmde-terminal")),
+            None => fl!("wmde-terminal"),
+        };
+        // WMDE: the title-bar tab already carries this text, so the centre title would only
+        // repeat it. The window title (taskbar, window list) is unaffected.
+        let header_title = if self.wmde_tabs_in_header() {
+            String::new()
         } else {
-            log::error!("Failed to get the specific pane");
-            Task::batch([
-                if let Some(window_id) = self.core.main_window_id() {
-                    self.set_window_title(fl!("wmde-terminal"), window_id)
-                } else {
-                    Task::none()
-                },
-                self.update_focus(),
-            ])
-        }
+            tab_title.unwrap_or_default()
+        };
+        self.set_header_title(header_title);
+        Task::batch([
+            if let Some(window_id) = self.core.main_window_id() {
+                self.set_window_title(window_title, window_id)
+            } else {
+                Task::none()
+            },
+            self.update_focus(),
+        ])
     }
 
     fn set_curr_font_weights_and_stretches(&mut self) {
@@ -1563,160 +1678,156 @@ impl App {
     }
 
     fn active_terminal_working_directory(&self) -> Option<PathBuf> {
-        let tab_model = self.pane_model.active()?;
-        let entity = tab_model.active();
-        let terminal = tab_model.data::<Mutex<Terminal>>(entity)?;
+        let terminal = self.active_terminal()?;
         let terminal = terminal.lock().unwrap();
         terminal.working_directory()
     }
 
-    fn create_and_focus_new_terminal(
+    // WMDE: build a terminal for the current config and profile. Shared by "new tab", which
+    // wraps it in a fresh layout of its own, and "split", which drops it into the current tab.
+    fn build_terminal(
         &mut self,
-        pane: pane_grid::Pane,
         profile_id_opt: Option<ProfileId>,
         inherit_working_directory: bool,
-    ) -> Task<Message> {
+    ) -> Result<(Terminal, Option<String>), TerminalSpawn> {
+        let Some(term_event_tx) = self.term_event_tx_opt.clone() else {
+            return Err(TerminalSpawn::NoChannel);
+        };
+        let color_scheme_kind = self.config.color_scheme_kind(self.core.system_theme());
+        let colors = match self
+            .themes
+            .get(&self.config.syntax_theme(color_scheme_kind, profile_id_opt))
+            .or_else(|| match color_scheme_kind {
+                ColorSchemeKind::Dark => self
+                    .themes
+                    .get(&(config::WMDE_THEME_DARK.to_string(), ColorSchemeKind::Dark)),
+                ColorSchemeKind::Light => self.themes.get(&(
+                    config::WMDE_THEME_LIGHT.to_string(),
+                    ColorSchemeKind::Light,
+                )),
+            }) {
+            Some(colors) => *colors,
+            None => return Err(TerminalSpawn::NoColors),
+        };
+
         let inherited_working_directory = inherit_working_directory
             .then(|| self.active_terminal_working_directory())
             .flatten();
-        self.pane_model.set_focus(pane);
-        match &self.term_event_tx_opt {
-            Some(term_event_tx) => {
-                let color_scheme_kind = self.config.color_scheme_kind(self.core.system_theme());
-                let colors = self
-                    .themes
-                    .get(&self.config.syntax_theme(color_scheme_kind, profile_id_opt))
-                    .or_else(|| match color_scheme_kind {
-                        ColorSchemeKind::Dark => self
-                            .themes
-                            .get(&(config::WMDE_THEME_DARK.to_string(), ColorSchemeKind::Dark)),
-                        ColorSchemeKind::Light => self.themes.get(&(
-                            config::WMDE_THEME_LIGHT.to_string(),
-                            ColorSchemeKind::Light,
-                        )),
-                    });
-                match colors {
-                    Some(colors) => {
-                        let current_pane = self.pane_model.focused();
-                        if let Some(tab_model) = self.pane_model.active_mut() {
-                            let (options, tab_title_override) = if let Some(profile) =
-                                profile_id_opt
-                                    .and_then(|profile_id| self.config.profiles.get(&profile_id))
-                            {
-                                // Merge profile and startup options, preferring startup options
-                                let startup_options =
-                                    self.startup_options.take().unwrap_or_default();
-                                let options = tty::Options {
-                                    shell: startup_options.shell.or_else(|| {
-                                        if let Some(mut args) = shlex::split(&profile.command)
-                                            && !args.is_empty()
-                                        {
-                                            let command = args.remove(0);
-                                            return Some(tty::Shell::new(command, args));
-                                        }
-                                        None
-                                    }),
-                                    working_directory: startup_options
-                                        .working_directory
-                                        .or_else(|| inherited_working_directory.clone())
-                                        .or_else(|| {
-                                            (!profile.working_directory.is_empty())
-                                                .then(|| profile.working_directory.clone().into())
-                                        }),
-                                    drain_on_exit: startup_options.drain_on_exit
-                                        || profile.drain_on_exit,
-                                    ..startup_options
-                                };
-                                let tab_title_override = if profile.tab_title.is_empty() {
-                                    None
-                                } else {
-                                    Some(profile.tab_title.clone())
-                                };
-                                (options, tab_title_override)
-                            } else {
-                                let mut options = self.startup_options.take().unwrap_or_default();
-                                if options.working_directory.is_none() {
-                                    options.working_directory = inherited_working_directory.clone();
-                                }
-                                (options, None)
-                            };
 
-                            let entity = tab_model
-                                .insert()
-                                .text(
-                                    tab_title_override
-                                        .clone()
-                                        .unwrap_or_else(|| fl!("new-terminal")),
-                                )
-                                .closable()
-                                .activate()
-                                .id();
-                            match Terminal::new(
-                                current_pane,
-                                entity,
-                                term_event_tx.clone(),
-                                self.term_config.clone(),
-                                options,
-                                &self.config,
-                                *colors,
-                                profile_id_opt,
-                                tab_title_override,
-                            ) {
-                                Ok(mut terminal) => {
-                                    terminal.set_config(
-                                        &self.config,
-                                        color_scheme_kind,
-                                        &self.themes,
-                                    );
-                                    tab_model
-                                        .data_set::<Mutex<Terminal>>(entity, Mutex::new(terminal));
-                                }
-                                Err(err) if profile_id_opt.is_some() => {
-                                    // Create a tab without a profile if the selected
-                                    // profile doesn't work
-                                    let name = profile_id_opt
-                                        .and_then(|id| self.config.profiles.get(&id))
-                                        .map(|profile| profile.name.as_str())
-                                        .unwrap_or_default();
-                                    log::error!(
-                                        "failed to open terminal with profile `{}`: {}",
-                                        name,
-                                        err
-                                    );
-
-                                    // TabClose focuses the nearest tab which would be incorrect
-                                    // in this specific case as it would unfocus the new tab
-                                    // created by TabNewNoProfile
-                                    // TabClose can also cause the terminal app to close if it
-                                    // closes the only open tab. This would close the terminal
-                                    // if launched with an invalid profile (issue #274)
-                                    tab_model.remove(entity);
-                                    return self.update(Message::TabNewNoProfile);
-                                }
-                                Err(err) => {
-                                    log::error!("failed to open terminal: {}", err);
-                                    // Clean up partially created tab
-                                    return self.update(Message::TabClose(Some(entity)));
-                                }
-                            }
-                        } else {
-                            log::error!("Found no active pane");
-                        }
+        let (options, tab_title_override) = if let Some(profile) =
+            profile_id_opt.and_then(|profile_id| self.config.profiles.get(&profile_id))
+        {
+            // Merge profile and startup options, preferring startup options
+            let startup_options = self.startup_options.take().unwrap_or_default();
+            let options = tty::Options {
+                shell: startup_options.shell.or_else(|| {
+                    if let Some(mut args) = shlex::split(&profile.command)
+                        && !args.is_empty()
+                    {
+                        let command = args.remove(0);
+                        return Some(tty::Shell::new(command, args));
                     }
-                    None => {
-                        log::error!(
-                            "failed to find terminal theme {:?}",
-                            self.config.syntax_theme(color_scheme_kind, profile_id_opt)
-                        );
-                        //TODO: fall back to known good theme
-                    }
-                }
+                    None
+                }),
+                working_directory: startup_options
+                    .working_directory
+                    .or_else(|| inherited_working_directory.clone())
+                    .or_else(|| {
+                        (!profile.working_directory.is_empty())
+                            .then(|| profile.working_directory.clone().into())
+                    }),
+                drain_on_exit: startup_options.drain_on_exit || profile.drain_on_exit,
+                ..startup_options
+            };
+            let tab_title_override = if profile.tab_title.is_empty() {
+                None
+            } else {
+                Some(profile.tab_title.clone())
+            };
+            (options, tab_title_override)
+        } else {
+            let mut options = self.startup_options.take().unwrap_or_default();
+            if options.working_directory.is_none() {
+                options.working_directory = inherited_working_directory.clone();
             }
-            None => {
-                log::warn!("tried to create new tab before having event channel");
+            (options, None)
+        };
+
+        match Terminal::new(
+            term_event_tx,
+            self.term_config.clone(),
+            options,
+            &self.config,
+            colors,
+            profile_id_opt,
+            tab_title_override.clone(),
+        ) {
+            Ok(mut terminal) => {
+                terminal.set_config(&self.config, color_scheme_kind, &self.themes);
+                Ok((terminal, tab_title_override))
+            }
+            Err(err) => Err(TerminalSpawn::Failed(err)),
+        }
+    }
+
+    // WMDE: a new tab is a fresh layout holding exactly one terminal - never a split.
+    fn create_tab(
+        &mut self,
+        profile_id_opt: Option<ProfileId>,
+        inherit_working_directory: bool,
+    ) -> Task<Message> {
+        match self.build_terminal(profile_id_opt, inherit_working_directory) {
+            Ok((terminal, tab_title_override)) => {
+                self.tab_model
+                    .insert()
+                    .text(tab_title_override.unwrap_or_else(|| fl!("new-terminal")))
+                    .closable()
+                    .data(TerminalTab::new(terminal))
+                    .activate();
+                self.update_title()
+            }
+            Err(TerminalSpawn::Failed(err)) if profile_id_opt.is_some() => {
+                // Open a tab without a profile if the selected profile does not work, rather
+                // than leaving the user with nothing (issue #274).
+                let name = profile_id_opt
+                    .and_then(|id| self.config.profiles.get(&id))
+                    .map(|profile| profile.name.as_str())
+                    .unwrap_or_default();
+                log::error!("failed to open terminal with profile `{}`: {}", name, err);
+                self.update(Message::TabNewNoProfile)
+            }
+            Err(err) => {
+                log::error!("failed to open terminal: {}", err);
+                Task::none()
             }
         }
-        self.update_title(Some(pane))
+    }
+
+    // WMDE: splitting divides the CURRENT tab; every other tab keeps its own layout.
+    fn split_active_tab(&mut self, axis: pane_grid::Axis) -> Task<Message> {
+        let (terminal, _) = match self.build_terminal(self.get_default_profile(), false) {
+            Ok(created) => created,
+            Err(err) => {
+                log::error!("failed to open terminal for a split: {}", err);
+                return Task::none();
+            }
+        };
+        let Some(tab) = self.active_tab_mut() else {
+            log::error!("tried to split with no active tab");
+            return Task::none();
+        };
+        let focus = tab.focused();
+        match tab.panes.split(axis, focus, Mutex::new(terminal)) {
+            Some((pane, _)) => {
+                tab.insert_terminal_id(pane);
+                tab.set_focus(pane);
+                self.update_title()
+            }
+            None => {
+                log::warn!("failed to split pane");
+                Task::none()
+            }
+        }
     }
 }
 
@@ -1949,9 +2060,9 @@ impl Application for App {
             zoom_steps.push(zoom_step);
         }
 
-        let pane_model = TerminalPaneGrid::new(segmented_button::ModelBuilder::default().build());
-        let mut terminal_ids = HashMap::new();
-        terminal_ids.insert(pane_model.focused(), widget::Id::unique());
+        // WMDE: no tab yet - the first one is opened by TermEventTx, once terminals can be
+        // spawned at all.
+        let tab_model = segmented_button::ModelBuilder::default().build();
 
         let about = About::default()
             .name(fl!("wmde-terminal"))
@@ -1974,7 +2085,7 @@ impl Application for App {
         let mut app = Self {
             core,
             about,
-            pane_model,
+            tab_model,
             config_handler: flags.config_handler,
             config: flags.config,
             shortcuts_config: flags.shortcuts_config,
@@ -1997,7 +2108,6 @@ impl Application for App {
             themes: HashMap::new(),
             context_page: ContextPage::Settings,
             dialog_opt: None,
-            terminal_ids,
             find: false,
             find_search_id: widget::Id::unique(),
             find_search_value: String::new(),
@@ -2025,7 +2135,7 @@ impl Application for App {
         };
 
         app.set_curr_font_weights_and_stretches();
-        let command = Task::batch([app.update_config(), app.update_title(None)]);
+        let command = Task::batch([app.update_config(), app.update_title()]);
 
         (app, command)
     }
@@ -2098,9 +2208,8 @@ impl Application for App {
                 return self.update_config();
             }
             Message::ClearScrollback(entity_opt) => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    let entity = entity_opt.unwrap_or_else(|| tab_model.active());
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+                if let Some(terminal) = self.terminal_for_action(entity_opt) {
+                    {
                         let terminal = terminal.lock().unwrap();
                         let mut term = terminal.term.lock();
                         term.grid_mut().clear_history();
@@ -2318,13 +2427,12 @@ impl Application for App {
                     // WMDE: show_headerbar can flip here too (another window wrote the
                     // config), and the title-bar tab strip - which carries the title - comes
                     // and goes with it, so the centre title has to be recomputed.
-                    return Task::batch([config_task, self.update_title(None)]);
+                    return Task::batch([config_task, self.update_title()]);
                 }
             }
             Message::Copy(entity_opt) => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    let entity = entity_opt.unwrap_or_else(|| tab_model.active());
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+                if let Some(terminal) = self.terminal_for_action(entity_opt) {
+                    {
                         let terminal = terminal.lock().unwrap();
                         let term = terminal.term.lock();
                         if let Some(text) = term.selection_to_string() {
@@ -2337,9 +2445,8 @@ impl Application for App {
                 return self.update_focus();
             }
             Message::CopyOrSigint(entity_opt) => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    let entity = entity_opt.unwrap_or_else(|| tab_model.active());
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+                if let Some(terminal) = self.terminal_for_action(entity_opt) {
+                    {
                         let mut terminal = terminal.lock().unwrap();
                         let mut term = terminal.term.lock();
                         if let Some(text) = term.selection_to_string() {
@@ -2368,9 +2475,8 @@ impl Application for App {
                 }
             }
             Message::CopyPrimary(entity_opt) => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    let entity = entity_opt.unwrap_or_else(|| tab_model.active());
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+                if let Some(terminal) = self.terminal_for_action(entity_opt) {
+                    {
                         let terminal = terminal.lock().unwrap();
                         let term = terminal.term.lock();
                         if let Some(text) = term.selection_to_string() {
@@ -2393,12 +2499,8 @@ impl Application for App {
                                 let mut font_system = font_system().write().unwrap();
                                 font_system.raw().db_mut().set_monospace_family(font_name);
                             }
-                            let panes: Vec<_> = self.pane_model.panes.iter().collect();
-                            for (_pane, tab_model) in panes {
-                                let entities: Vec<_> = tab_model.iter().collect();
-                                for entity in entities {
-                                    if let Some(terminal) =
-                                        tab_model.data::<Mutex<Terminal>>(entity)
+                            for terminal in self.all_terminals() {
+                                {
                                     {
                                         let mut terminal = terminal.lock().unwrap();
                                         terminal.update_cell_size();
@@ -2480,15 +2582,12 @@ impl Application for App {
                     return dialog.update(*dialog_message);
                 }
             }
-            Message::Drop(Some((pane, entity, data))) => {
-                self.pane_model.set_focus(pane);
+            Message::Drop(Some((pane, data))) => {
+                self.focus_pane(pane);
                 if let Ok(value) = shlex::try_join(data.paths.iter().filter_map(|p| p.to_str())) {
                     return Task::batch([
                         self.update_focus(),
-                        cosmic::task::message(action::app(Message::PasteValue(
-                            Some(entity),
-                            value,
-                        ))),
+                        cosmic::task::message(action::app(Message::PasteValue(None, value))),
                     ]);
                 }
             }
@@ -2496,17 +2595,17 @@ impl Application for App {
             Message::Find(find) => {
                 self.find = find;
                 if find {
-                    if let Some(tab_model) = self.pane_model.active() {
-                        let entity = tab_model.active();
-                        if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                            let terminal = terminal.lock().unwrap();
-                            let term = terminal.term.lock();
-                            if let Some(text) = term.selection_to_string() {
-                                self.find_search_value = text;
-                            }
-                        }
-                    } else {
-                        log::warn!("Failed to get focused pane");
+                    // Read the selection out before touching self again - the terminal is
+                    // borrowed from self for as long as the guard lives.
+                    let selection = self.active_terminal().map(|terminal| {
+                        let terminal = terminal.lock().unwrap();
+                        let term = terminal.term.lock();
+                        term.selection_to_string()
+                    });
+                    match selection {
+                        Some(Some(text)) => self.find_search_value = text,
+                        Some(None) => {}
+                        None => log::warn!("Failed to get the focused terminal"),
                     }
                 } else {
                     self.find_search_value.clear();
@@ -2517,13 +2616,10 @@ impl Application for App {
             }
             Message::FindNext => {
                 if !self.find_search_value.is_empty()
-                    && let Some(tab_model) = self.pane_model.active()
+                    && let Some(terminal) = self.active_terminal()
                 {
-                    let entity = tab_model.active();
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                        let mut terminal = terminal.lock().unwrap();
-                        terminal.search(&self.find_search_value, true);
-                    }
+                    let mut terminal = terminal.lock().unwrap();
+                    terminal.search(&self.find_search_value, true);
                 }
 
                 // Focus correct input
@@ -2531,13 +2627,10 @@ impl Application for App {
             }
             Message::FindPrevious => {
                 if !self.find_search_value.is_empty()
-                    && let Some(tab_model) = self.pane_model.active()
+                    && let Some(terminal) = self.active_terminal()
                 {
-                    let entity = tab_model.active();
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                        let mut terminal = terminal.lock().unwrap();
-                        terminal.search(&self.find_search_value, false);
-                    }
+                    let mut terminal = terminal.lock().unwrap();
+                    terminal.search(&self.find_search_value, false);
                 }
 
                 // Focus correct input
@@ -2546,12 +2639,12 @@ impl Application for App {
             Message::FindSearchValueChanged(value) => {
                 self.find_search_value = value;
             }
-            Message::MiddleClick(pane, entity_opt) => {
-                self.pane_model.set_focus(pane);
+            Message::MiddleClick(pane) => {
+                self.focus_pane(pane);
                 return Task::batch([
                     self.update_focus(),
                     clipboard::read_primary().map(move |value_opt| match value_opt {
-                        Some(value) => action::app(Message::PasteValue(entity_opt, value)),
+                        Some(value) => action::app(Message::PasteValue(None, value)),
                         None => action::none(),
                     }),
                 ]);
@@ -2610,9 +2703,8 @@ impl Application for App {
                 }
             }
             Message::CopyUrlByMenu => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    let entity = tab_model.active();
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+                if let Some(terminal) = self.active_terminal() {
+                    {
                         let mut terminal = terminal.lock().unwrap();
                         if let Some(url) =
                             terminal.context_menu.as_ref().and_then(|m| m.link.as_ref())
@@ -2628,9 +2720,8 @@ impl Application for App {
                 }
             }
             Message::LaunchUrlByMenu => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    let entity = tab_model.active();
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+                if let Some(terminal) = self.active_terminal() {
+                    {
                         let mut terminal = terminal.lock().unwrap();
                         if let Some(url) =
                             terminal.context_menu.as_ref().and_then(|m| m.link.as_ref())
@@ -2648,7 +2739,7 @@ impl Application for App {
                 self.modifiers = modifiers;
             }
             Message::MouseEnter(pane) => {
-                self.pane_model.set_focus(pane);
+                self.focus_pane(pane);
                 return self.update_focus();
             }
             Message::ShortcutCaptureCancel => {
@@ -2708,47 +2799,44 @@ impl Application for App {
                 config_set!(opacity, cmp::min(100, opacity));
             }
             Message::PaneClicked(pane) => {
-                self.pane_model.set_focus(pane);
-                let title_task = self.update_title(Some(pane));
+                self.focus_pane(pane);
+                let title_task = self.update_title();
                 return Task::batch([self.update_focus(), title_task]);
             }
             Message::PaneSplit(axis) => {
-                let result = self.pane_model.panes.split(
-                    axis,
-                    self.pane_model.focused(),
-                    segmented_button::ModelBuilder::default().build(),
-                );
-                if let Some((pane, _)) = result {
-                    self.terminal_ids.insert(pane, widget::Id::unique());
-                    let command =
-                        self.create_and_focus_new_terminal(pane, self.get_default_profile(), false);
-                    self.pane_model.panes_created += 1;
-                    return command;
-                }
+                return self.split_active_tab(axis);
             }
             Message::PaneToggleMaximized => {
-                if self.pane_model.panes.maximized().is_some() {
-                    self.pane_model.panes.restore();
-                } else {
-                    self.pane_model.panes.maximize(self.pane_model.focused());
+                if let Some(tab) = self.active_tab_mut() {
+                    if tab.panes.maximized().is_some() {
+                        tab.panes.restore();
+                    } else {
+                        let focus = tab.focused();
+                        tab.panes.maximize(focus);
+                    }
                 }
                 return self.update_focus();
             }
             Message::PaneFocusAdjacent(direction) => {
-                if let Some(adjacent) = self
-                    .pane_model
-                    .panes
-                    .adjacent(self.pane_model.focused(), direction)
-                {
-                    self.pane_model.set_focus(adjacent);
-                    return self.update_title(Some(adjacent));
+                let adjacent = self
+                    .active_tab()
+                    .and_then(|tab| tab.panes.adjacent(tab.focused(), direction));
+                if let Some(adjacent) = adjacent {
+                    self.focus_pane(adjacent);
+                    return self.update_title();
                 }
             }
+            // WMDE: splits and their ratios belong to one tab - a Split id is only meaningful
+            // inside the grid that handed it out.
             Message::PaneResized(pane_grid::ResizeEvent { split, ratio }) => {
-                self.pane_model.panes.resize(split, ratio);
+                if let Some(tab) = self.active_tab_mut() {
+                    tab.panes.resize(split, ratio);
+                }
             }
             Message::PaneDragged(pane_grid::DragEvent::Dropped { pane, target }) => {
-                self.pane_model.panes.drop(pane, target);
+                if let Some(tab) = self.active_tab_mut() {
+                    tab.panes.drop(pane, target);
+                }
             }
             Message::PaneDragged(_) => {}
             #[cfg(feature = "password_manager")]
@@ -2757,15 +2845,18 @@ impl Application for App {
             }
             #[cfg(feature = "password_manager")]
             Message::PasswordPaste(password, pane) => {
-                if let Some(tab_model) = self.pane_model.panes.get(pane) {
-                    let entity = tab_model.active();
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+                let pasted = self
+                    .active_tab()
+                    .and_then(|tab| tab.panes.get(pane))
+                    .map(|terminal| {
                         let terminal = terminal.lock().unwrap();
                         terminal.paste(password.into_unsecure());
                         terminal.input_scroll(b"\n".as_slice());
-                        self.core.window.show_context = false;
-                        self.password_mgr.clear();
-                    }
+                    })
+                    .is_some();
+                if pasted {
+                    self.core.window.show_context = false;
+                    self.password_mgr.clear();
                 }
             }
             Message::Paste(entity_opt) => {
@@ -2781,9 +2872,8 @@ impl Application for App {
                 });
             }
             Message::PasteValue(entity_opt, value) => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    let entity = entity_opt.unwrap_or_else(|| tab_model.active());
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+                if let Some(terminal) = self.terminal_for_action(entity_opt) {
+                    {
                         let terminal = terminal.lock().unwrap();
                         terminal.paste(value);
                     }
@@ -2833,22 +2923,14 @@ impl Application for App {
                 return self.save_profiles();
             }
             Message::ProfileOpen(profile_id) => {
-                return self.create_and_focus_new_terminal(
-                    self.pane_model.focused(),
-                    Some(profile_id),
-                    false,
-                );
+                return self.create_tab(Some(profile_id), false);
             }
             Message::ProfileRemove(profile_id) => {
                 // Reset matching terminals to default profile
-                for (_pane, tab_model) in self.pane_model.panes.iter() {
-                    for entity in tab_model.iter() {
-                        if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                            let mut terminal = terminal.lock().unwrap();
-                            if terminal.profile_id_opt == Some(profile_id) {
-                                terminal.profile_id_opt = None;
-                            }
-                        }
+                for terminal in self.all_terminals() {
+                    let mut terminal = terminal.lock().unwrap();
+                    if terminal.profile_id_opt == Some(profile_id) {
+                        terminal.profile_id_opt = None;
                     }
                 }
                 if Some(profile_id) == self.get_default_profile() {
@@ -2888,9 +2970,8 @@ impl Application for App {
                 }
             }
             Message::SelectAll(entity_opt) => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    let entity = entity_opt.unwrap_or_else(|| tab_model.active());
-                    if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+                if let Some(terminal) = self.terminal_for_action(entity_opt) {
+                    {
                         let mut terminal = terminal.lock().unwrap();
                         terminal.select_all();
                     }
@@ -2903,7 +2984,7 @@ impl Application for App {
                     let config_task = self.update_config();
                     // WMDE: the title-bar tab strip comes and goes with the header bar, and it
                     // carries the title, so the centre title has to follow it.
-                    return Task::batch([config_task, self.update_title(None)]);
+                    return Task::batch([config_task, self.update_title()]);
                 }
             }
             Message::TabNewInheritWorkingDirectory(tab_new_inherit_working_directory) => {
@@ -2943,26 +3024,16 @@ impl Application for App {
                 }
             }
             Message::TabActivate(entity) => {
-                if let Some(tab_model) = self.pane_model.active_mut() {
-                    tab_model.activate(entity);
-                }
-                return self.update_title(None);
-            }
-            // WMDE: clicking a tab in a pane's strip focuses that pane first - otherwise the
-            // entity is looked up in whichever pane happens to hold focus, where it does not
-            // exist, and the click does nothing at all.
-            Message::PaneTabActivate(pane, entity) => {
-                self.pane_model.set_focus(pane);
-                return self.update(Message::TabActivate(entity));
-            }
-            Message::PaneTabClose(pane, entity) => {
-                self.pane_model.set_focus(pane);
-                return self.update(Message::TabClose(Some(entity)));
+                self.tab_model.activate(entity);
+                // WMDE: switching tabs swaps the whole layout, so the terminals of the tab we
+                // left must stop drawing a focused cursor.
+                self.refresh_terminal_focus();
+                return self.update_title();
             }
             Message::TabActivateJump(pos) => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    // Length is always at least one so there shouldn't be a division by zero
-                    let len = tab_model.iter().count();
+                // Length is always at least one so there shouldn't be a division by zero
+                let len = self.tab_model.iter().count();
+                if len > 0 {
                     // The typical pattern is that 1-8 selects tabs 1-8 while 9 selects the last tab
                     let pos = if pos >= 8 || pos > len - 1 {
                         len - 1
@@ -2970,47 +3041,16 @@ impl Application for App {
                         pos % len
                     };
 
-                    let entity = tab_model.iter().nth(pos);
+                    let entity = self.tab_model.iter().nth(pos);
                     if let Some(entity) = entity {
                         return self.update(Message::TabActivate(entity));
                     }
                 }
             }
+            // WMDE: closing a tab takes its whole layout - every terminal split into it.
             Message::TabClose(entity_opt) => {
-                if let Some(tab_model) = self.pane_model.active_mut() {
-                    let entity = entity_opt.unwrap_or_else(|| tab_model.active());
-
-                    // Activate closest item if closing active tab
-                    if entity == tab_model.active()
-                        && let Some(position) = tab_model.position(entity)
-                    {
-                        if position > 0 {
-                            tab_model.activate_position(position - 1);
-                        } else {
-                            tab_model.activate_position(position + 1);
-                        }
-                    }
-
-                    // Remove item
-                    tab_model.remove(entity);
-
-                    // If that was the last tab, close current pane
-                    if tab_model.iter().next().is_none() {
-                        if let Some((_state, sibling)) =
-                            self.pane_model.panes.close(self.pane_model.focused())
-                        {
-                            self.terminal_ids.remove(&self.pane_model.focused());
-                            self.pane_model.set_focus(sibling);
-                        } else {
-                            //Last pane, closing window
-                            if let Some(window_id) = self.core.main_window_id() {
-                                return window::close(window_id);
-                            }
-                        }
-                    }
-                }
-
-                return self.update_title(None);
+                let entity = entity_opt.unwrap_or_else(|| self.tab_model.active());
+                return self.close_tab(entity);
             }
             Message::TabContextAction(entity, action) => {
                 // Close context menu popup
@@ -3024,9 +3064,7 @@ impl Application for App {
                     }
                 }
                 // Close terminal context menu state
-                if let Some(tab_model) = self.pane_model.active()
-                    && let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity)
-                {
+                if let Some(terminal) = self.tab(entity).and_then(TerminalTab::active) {
                     let mut terminal = terminal.lock().unwrap();
                     //Some actions need the menu_state,
                     //so only clear the position for them.
@@ -3059,24 +3097,22 @@ impl Application for App {
                 }
 
                 // Clear all terminal context_menu state
-                for (_, tab_model) in self.pane_model.panes.iter() {
-                    for entity in tab_model.iter() {
-                        if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                            let mut terminal = terminal.lock().unwrap();
-                            terminal.context_menu = None;
-                        }
-                    }
+                for terminal in self.all_terminals() {
+                    let mut terminal = terminal.lock().unwrap();
+                    terminal.context_menu = None;
                 }
 
                 if let Some(menu_state) = menu_state {
                     if let Some(_position) = menu_state.position {
                         let local_position = menu_state.local_position.unwrap_or(_position);
-                        if let Some(tab_model) = self.pane_model.panes.get(pane) {
-                            let entity = tab_model.active();
+                        {
+                            let entity = self.tab_model.active();
                             let link = menu_state.link.clone();
                             let popup_id = window::Id::unique();
 
-                            if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+                            if let Some(terminal) =
+                                self.active_tab().and_then(|tab| tab.panes.get(pane))
+                            {
                                 let mut terminal = terminal.lock().unwrap();
                                 terminal.context_menu = Some(menu_state);
                             }
@@ -3129,54 +3165,55 @@ impl Application for App {
                             }
                         }
                     }
-                    self.pane_model.set_focus(pane);
+                    self.focus_pane(pane);
                 }
 
                 return cosmic::Task::batch(tasks);
             }
             Message::TabNew => {
-                return self.create_and_focus_new_terminal(
-                    self.pane_model.focused(),
+                return self.create_tab(
                     self.get_default_profile(),
                     self.config.tab_new_inherit_working_directory,
                 );
             }
             Message::TabNewNoProfile => {
-                return self.create_and_focus_new_terminal(
-                    self.pane_model.focused(),
-                    None,
-                    self.config.tab_new_inherit_working_directory,
-                );
+                return self.create_tab(None, self.config.tab_new_inherit_working_directory);
             }
             Message::TabNext => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    let len = tab_model.iter().count();
+                let len = self.tab_model.iter().count();
+                if len > 0 {
                     // Next tab position. Wraps around to 0 (first tab) if the last tab is active.
-                    let pos = tab_model
-                        .position(tab_model.active())
+                    let pos = self
+                        .tab_model
+                        .position(self.tab_model.active())
                         .map(|i| (i as usize + 1) % len)
                         .expect("at least one tab is always open");
 
-                    let entity = tab_model.iter().nth(pos);
+                    let entity = self.tab_model.iter().nth(pos);
                     if let Some(entity) = entity {
                         return self.update(Message::TabActivate(entity));
                     }
                 }
             }
             Message::TabPrev => {
-                if let Some(tab_model) = self.pane_model.active() {
-                    let pos = tab_model
-                        .position(tab_model.active())
-                        .and_then(|i| (i as usize).checked_sub(1))
-                        .unwrap_or_else(|| tab_model.iter().count().saturating_sub(1));
+                let pos = self
+                    .tab_model
+                    .position(self.tab_model.active())
+                    .and_then(|i| (i as usize).checked_sub(1))
+                    .unwrap_or_else(|| self.tab_model.iter().count().saturating_sub(1));
 
-                    let entity = tab_model.iter().nth(pos);
-                    if let Some(entity) = entity {
-                        return self.update(Message::TabActivate(entity));
-                    }
+                let entity = self.tab_model.iter().nth(pos);
+                if let Some(entity) = entity {
+                    return self.update(Message::TabActivate(entity));
                 }
             }
-            Message::TermEvent(pane, entity, event) => {
+            Message::TermEvent(terminal_id, event) => {
+                // WMDE: events are addressed by the terminal's own id, so first find where it
+                // lives now - tabs own layouts, and a pane id only means something inside one.
+                let Some((tab_entity, pane)) = self.find_terminal(terminal_id) else {
+                    // The terminal was closed while its event was in flight.
+                    return Task::none();
+                };
                 match event {
                     TermEvent::Bell => {
                         //TODO: audible or visible bell options?
@@ -3207,9 +3244,7 @@ impl Application for App {
                         }
                     },
                     TermEvent::ColorRequest(index, f) => {
-                        if let Some(tab_model) = self.pane_model.panes.get(pane)
-                            && let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity)
-                        {
+                        if let Some(terminal) = self.terminal(tab_entity, pane) {
                             let terminal = terminal.lock().unwrap();
                             let rgb = terminal.effective_color(index);
                             let text = f(rgb);
@@ -3220,71 +3255,54 @@ impl Application for App {
                         //TODO: should we blink the cursor?
                     }
                     TermEvent::Exit => {
-                        return self.update(Message::TabClose(Some(entity)));
+                        // WMDE: a shell exiting closes its own pane, not the whole tab. Only
+                        // when it was the tab's last pane does the tab go, and with it the
+                        // window if it was the last tab.
+                        return self.close_pane(tab_entity, pane);
                     }
                     TermEvent::PtyWrite(text) => {
-                        if let Some(tab_model) = self.pane_model.panes.get(pane)
-                            && let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity)
-                        {
+                        if let Some(terminal) = self.terminal(tab_entity, pane) {
                             let terminal = terminal.lock().unwrap();
                             terminal.input_no_scroll(text.into_bytes());
                         }
                     }
                     TermEvent::ResetTitle => {
-                        if let Some(tab_model) = self.pane_model.panes.get_mut(pane) {
-                            let tab_title_override =
-                                if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                                    let terminal = terminal.lock().unwrap();
-                                    terminal.tab_title_override.clone()
-                                } else {
-                                    None
-                                };
-                            tab_model.text_set(
-                                entity,
+                        let tab_title_override = self
+                            .terminal(tab_entity, pane)
+                            .and_then(|terminal| terminal.lock().unwrap().tab_title_override.clone());
+                        if self.names_the_tab(tab_entity, pane) {
+                            self.tab_model.text_set(
+                                tab_entity,
                                 tab_title_override.unwrap_or_else(|| fl!("new-terminal")),
                             );
                         }
-                        return self.update_title(Some(pane));
+                        return self.update_title();
                     }
                     TermEvent::TextAreaSizeRequest(f) => {
-                        if let Some(tab_model) = self.pane_model.panes.get(pane)
-                            && let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity)
-                        {
+                        if let Some(terminal) = self.terminal(tab_entity, pane) {
                             let terminal = terminal.lock().unwrap();
                             let text = f(terminal.size().into());
                             terminal.input_no_scroll(text.into_bytes());
                         }
                     }
                     TermEvent::Title(title) => {
-                        if let Some(tab_model) = self.pane_model.panes.get_mut(pane) {
-                            let has_override =
-                                if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
-                                    let terminal = terminal.lock().unwrap();
-                                    terminal.tab_title_override.is_some()
-                                } else {
-                                    false
-                                };
-                            if !has_override {
-                                tab_model.text_set(entity, title);
+                        // WMDE: a tab is named by its focused pane, and the window by the
+                        // active tab. A shell in a background split - or a background tab -
+                        // used to take over the whole window title and the taskbar entry.
+                        let has_override = self
+                            .terminal(tab_entity, pane)
+                            .is_some_and(|terminal| {
+                                terminal.lock().unwrap().tab_title_override.is_some()
+                            });
+                        if !has_override && self.names_the_tab(tab_entity, pane) {
+                            self.tab_model.text_set(tab_entity, title);
+                            if tab_entity == self.tab_model.active() {
+                                return self.update_title();
                             }
-                        }
-                        // WMDE: only the tab the user is actually looking at may rename the
-                        // window. A shell in a background pane - or in a background tab of this
-                        // one - emitting an OSC title used to take over the whole window title
-                        // and the taskbar entry. Its own tab label is already updated above.
-                        let names_the_window = pane == self.pane_model.focused()
-                            && self
-                                .pane_model
-                                .active()
-                                .is_some_and(|tab_model| tab_model.active() == entity);
-                        if names_the_window {
-                            return self.update_title(Some(pane));
                         }
                     }
                     TermEvent::MouseCursorDirty | TermEvent::Wakeup => {
-                        if let Some(tab_model) = self.pane_model.panes.get(pane)
-                            && let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity)
-                        {
+                        if let Some(terminal) = self.terminal(tab_entity, pane) {
                             let mut terminal = terminal.lock().unwrap();
                             terminal.needs_update = true;
                         }
@@ -3300,20 +3318,11 @@ impl Application for App {
                     // Close tabs using old terminal event channel
                     log::warn!("terminal event channel reset, closing tabs");
 
-                    // First, close other panes
-                    while let Some((_state, sibling)) =
-                        self.pane_model.panes.close(self.pane_model.focused())
-                    {
-                        self.terminal_ids.remove(&self.pane_model.focused());
-                        self.pane_model.set_focus(sibling);
-                    }
-
-                    // Next, close all tabs in the active pane
-                    if let Some(tab_model) = self.pane_model.active_mut() {
-                        let entities: Vec<_> = tab_model.iter().collect();
-                        for entity in entities {
-                            tab_model.remove(entity);
-                        }
+                    // WMDE: every tab holds terminals bound to the dead channel, so all of
+                    // them go - layouts and all - and a single fresh tab is opened below.
+                    let entities: Vec<_> = self.tab_model.iter().collect();
+                    for entity in entities {
+                        self.tab_model.remove(entity);
                     }
                 }
 
@@ -3326,7 +3335,7 @@ impl Application for App {
             Message::ToggleContextPage(context_page) => {
                 if self.context_page == context_page {
                     self.core.window.show_context = !self.core.window.show_context;
-                    self.pane_model.update_terminal_focus();
+                    self.refresh_terminal_focus();
 
                     if let ContextPage::KeyboardShortcuts = context_page {
                         self.shortcut_page_toggle();
@@ -3335,7 +3344,7 @@ impl Application for App {
                     #[cfg(feature = "password_manager")]
                     if ContextPage::PasswordManager == context_page {
                         if self.core.window.show_context {
-                            self.password_mgr.pane = Some(self.pane_model.focused());
+                            self.password_mgr.pane = self.active_tab().map(TerminalTab::focused);
                             return self.password_mgr.refresh_password_list();
                         } else {
                             self.password_mgr.clear();
@@ -3345,7 +3354,9 @@ impl Application for App {
                 } else {
                     self.context_page = context_page;
                     self.core.window.show_context = true;
-                    self.pane_model.unfocus_all_terminals();
+                    if let Some(tab) = self.active_tab() {
+                    tab.unfocus_all_terminals();
+                }
                 }
 
                 // Extra work to do to prepare context pages
@@ -3380,7 +3391,7 @@ impl Application for App {
 
                 #[cfg(feature = "password_manager")]
                 if ContextPage::PasswordManager == context_page {
-                    self.password_mgr.pane = Some(self.pane_model.focused());
+                    self.password_mgr.pane = self.active_tab().map(TerminalTab::focused);
                     return self.password_mgr.refresh_password_list();
                 }
             }
@@ -3414,12 +3425,14 @@ impl Application for App {
             },
             Message::WindowFocused => {
                 if !self.core.window.show_context {
-                    self.pane_model.update_terminal_focus();
+                    self.refresh_terminal_focus();
                 }
                 return self.update_focus();
             }
             Message::WindowUnfocused => {
-                self.pane_model.unfocus_all_terminals();
+                if let Some(tab) = self.active_tab() {
+                    tab.unfocus_all_terminals();
+                }
             }
             Message::ZoomIn => {
                 return self.update_render_active_pane_zoom(message);
@@ -3436,8 +3449,9 @@ impl Application for App {
                     && id == *popup_id
                 {
                     // Clear link underline on the terminal
-                    if let Some(tab_model) = self.pane_model.panes.get(*pane)
-                        && let Some(terminal) = tab_model.data::<Mutex<Terminal>>(*entity)
+                    if let Some(terminal) = self
+                        .tab(*entity)
+                        .and_then(|tab| tab.panes.get(*pane))
                     {
                         let mut terminal = terminal.lock().unwrap();
                         terminal.context_menu = None;
@@ -3452,19 +3466,13 @@ impl Application for App {
                     cosmic::app::Action::Surface(a),
                 ));
             }
-            Message::ReorderTab(
-                pane,
-                ReorderEvent {
-                    dragged,
-                    target,
-                    position,
-                },
-            ) => {
-                let Some(p) = self.pane_model.panes.get_mut(pane) else {
-                    log::error!("Failed to find reordered tab model.");
-                    return Task::none();
-                };
-                _ = p.reorder(dragged, target, position);
+            // WMDE: tabs are top level now, so reordering moves them within the one model.
+            Message::ReorderTab(ReorderEvent {
+                dragged,
+                target,
+                position,
+            }) => {
+                _ = self.tab_model.reorder(dragged, target, position);
             }
         }
 
@@ -3540,17 +3548,13 @@ impl Application for App {
     }
 
     fn header_start(&self) -> Vec<Element<'_, Self::Message>> {
-        // WMDE: browser-style tabs at the left of the CSD title bar (Win11-like), always the
-        // focused pane's. The menu moved to a strip of its own below. TabActivate/TabClose act
-        // on the focused pane, which is exactly the pane these tabs belong to.
+        // WMDE: browser-style tabs at the left of the CSD title bar (Win11-like). Each of them
+        // is a whole layout of terminals, so splitting never disturbs this strip. The menu moved
+        // to a strip of its own below.
         if !self.wmde_tabs_in_header() {
             return Vec::new();
         }
-        let Some(tab_model) = self.pane_model.active() else {
-            return Vec::new();
-        };
         let cosmic_theme::Spacing { space_xxs, .. } = self.core().system_theme().cosmic().spacing;
-        let pane = self.pane_model.focused();
         // WMDE: the "+" follows the tabs, and the tab strip is capped so that it can never
         // take the button's width. `responsive` hands us the room the header has left, which
         // is the only place that number is known. Once the tabs fill the bar the strip
@@ -3561,12 +3565,12 @@ impl Application for App {
                 let strip_max = (size.width - WMDE_NEW_TAB_BUTTON_WIDTH).max(0.0);
                 widget::row::with_children(vec![
                     widget::container(
-                        widget::tab_bar::horizontal(tab_model)
+                        widget::tab_bar::horizontal(&self.tab_model)
                             .button_height(32)
                             .button_spacing(space_xxs)
                             .style(wmde_tab_style(false))
                             .enable_tab_drag(String::from("x-wmde-term/tab"))
-                            .on_reorder(move |event| Message::ReorderTab(pane, event))
+                            .on_reorder(Message::ReorderTab)
                             .tab_drag_threshold(25.)
                             .on_activate(Message::TabActivate)
                             .on_close(|entity| Message::TabClose(Some(entity)))
@@ -3624,56 +3628,24 @@ impl Application for App {
         let cosmic = t.cosmic();
         let cosmic_theme::Spacing { space_xxs, .. } = cosmic.spacing;
 
-        // WMDE: the tabs live in the title bar, so a pane draws its own strip only when there
-        // is no header bar to hold them.
-        let tabs_in_header = self.wmde_tabs_in_header();
+        // WMDE: one tab is one layout, so the grid on screen is the ACTIVE tab's.
+        let Some(active_tab) = self.active_tab() else {
+            // No tab yet - the first one is created once the terminal event channel is up.
+            return widget::space::horizontal().into();
+        };
 
-        let pane_grid = PaneGrid::new(&self.pane_model.panes, |pane, tab_model, _is_maximized| {
+        let pane_grid = PaneGrid::new(&active_tab.panes, |pane, terminal, _is_maximized| {
             let mut tab_column = widget::column::with_capacity(1);
 
-            if !tabs_in_header && tab_model.iter().count() > 1 {
-                tab_column = tab_column.push(
-                    widget::container(
-                        widget::tab_bar::horizontal(tab_model)
-                            .enable_tab_drag(String::from("x-wmde-term/tab"))
-                            .on_reorder(move |event| Message::ReorderTab(pane, event))
-                            .tab_drag_threshold(25.)
-                            .button_height(32)
-                            .button_spacing(space_xxs)
-                            .style(wmde_tab_style(true))
-                            .on_activate(move |entity| Message::PaneTabActivate(pane, entity))
-                            .on_close(move |entity| Message::PaneTabClose(pane, entity)),
-                    )
-                    .class(style::Container::Custom(Box::new(|theme| {
-                        let cosmic = theme.cosmic();
-                        cosmic::iced::widget::container::Style {
-                            icon_color: Some(Color::from(cosmic.background(theme.transparent).on)),
-                            text_color: Some(Color::from(cosmic.background(theme.transparent).on)),
-                            background: Some(iced::Background::Color(
-                                cosmic.background(theme.transparent).base.into(),
-                            )),
-                            border: iced::Border::default(),
-                            shadow: iced::Shadow::default(),
-                            snap: true,
-                        }
-                    })))
-                    .width(Length::Fill),
-                );
-            }
-
-            let entity = tab_model.active();
-            let entity_middle_click = tab_model.active();
-            let terminal_id = self
-                .terminal_ids
-                .get(&pane)
-                .cloned()
+            let terminal_id = active_tab
+                .terminal_id(pane)
                 .unwrap_or_else(widget::Id::unique);
-            if let Some(terminal) = tab_model.data::<Mutex<Terminal>>(entity) {
+            {
                 let mut terminal_box = terminal_box(terminal, &self.key_binds)
                     .id(terminal_id)
                     .disabled(self.core.window.show_context)
                     .on_context_menu(move |menu_state| Message::TabContextMenu(pane, menu_state))
-                    .on_middle_click(move || Message::MiddleClick(pane, Some(entity_middle_click)))
+                    .on_middle_click(move || Message::MiddleClick(pane))
                     .on_open_hyperlink(Some(Box::new(Message::LaunchUrl)))
                     .on_window_focused(|| Message::WindowFocused)
                     .on_window_unfocused(|| Message::WindowUnfocused)
@@ -3737,7 +3709,7 @@ impl Application for App {
             }
 
             //Only draw find in the currently focused pane
-            if self.find && pane == self.pane_model.focused() {
+            if self.find && pane == active_tab.focused() {
                 let find_input = widget::text_input::text_input(
                     fl!("find-placeholder"),
                     &self.find_search_value,
@@ -3800,7 +3772,7 @@ impl Application for App {
             DndDestination::for_data::<DndDrop>(tab_column, move |data, action| {
                 if let Some(data) = data {
                     if action == DndAction::Move {
-                        Message::Drop(Some((pane, entity, data)))
+                        Message::Drop(Some((pane, data)))
                     } else {
                         log::warn!("unsuppported action: {:?}", action);
                         Message::Drop(None)
@@ -3819,8 +3791,45 @@ impl Application for App {
 
         //TODO: apply window border radius xs at bottom of window
         if !self.core.window.show_headerbar {
-            // Nothing to hang a menu strip under - this mode is meant to be a bare terminal.
-            return pane_grid.into();
+            // WMDE: no title bar to hold the tabs, so the strip moves to the top of the body -
+            // otherwise this mode would have no way to see or switch tabs with the mouse. It
+            // keeps the underline here: there is no menu row beneath it to merge into.
+            if self.tab_model.iter().count() < 2 {
+                // A single tab needs no strip; the mode is meant to be a bare terminal.
+                return pane_grid.into();
+            }
+            return widget::column::with_children(vec![
+                widget::container(
+                    widget::tab_bar::horizontal(&self.tab_model)
+                        .button_height(32)
+                        .button_spacing(space_xxs)
+                        .style(wmde_tab_style(true))
+                        .enable_tab_drag(String::from("x-wmde-term/tab"))
+                        .on_reorder(Message::ReorderTab)
+                        .tab_drag_threshold(25.)
+                        .on_activate(Message::TabActivate)
+                        .on_close(|entity| Message::TabClose(Some(entity))),
+                )
+                .class(style::Container::Custom(Box::new(|theme| {
+                    let cosmic = theme.cosmic();
+                    cosmic::iced::widget::container::Style {
+                        icon_color: Some(Color::from(cosmic.background(theme.transparent).on)),
+                        text_color: Some(Color::from(cosmic.background(theme.transparent).on)),
+                        background: Some(iced::Background::Color(
+                            cosmic.background(theme.transparent).base.into(),
+                        )),
+                        border: iced::Border::default(),
+                        shadow: iced::Shadow::default(),
+                        snap: true,
+                    }
+                })))
+                .width(Length::Fill)
+                .into(),
+                pane_grid.into(),
+            ])
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into();
         }
 
         // WMDE: full-width menu strip under the title bar, like wmde-files. It shares the
@@ -3872,9 +3881,9 @@ impl Application for App {
                         let (event_tx, mut event_rx) = mpsc::unbounded_channel();
                         output.send(Message::TermEventTx(event_tx)).await.unwrap();
 
-                        while let Some((pane, entity, event)) = event_rx.recv().await {
+                        while let Some((terminal_id, event)) = event_rx.recv().await {
                             output
-                                .send(Message::TermEvent(pane, entity, event))
+                                .send(Message::TermEvent(terminal_id, event))
                                 .await
                                 .unwrap();
                         }
