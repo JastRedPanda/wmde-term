@@ -1,4 +1,4 @@
-cosmic-terminal = Terminal COSMIC
+wmde-terminal = Terminal WMDE
 new-terminal = Nouveau terminal
 
 # Context Pages
@@ -108,7 +108,7 @@ split-vertical = Scinder en vertical
 pane-toggle-maximize = Vue unique
 menu-color-schemes = Palettes de couleurs...
 menu-settings = Paramètres...
-menu-about = À propos de terminal COSMIC...
+menu-about = À propos de terminal WMDE...
 repository = Dépôt
 support = Support
 menu-password-manager = Mots de passe...
@@ -145,7 +145,7 @@ focus-pane-right = Passer au panneau de droite
 focus-pane-up = Passer au panneau du dessus
 reset-to-default = Rétablir les paramètres par défaut
 toggle-fullscreen = Basculer en plein écran
-comment = Émulateur de terminal pour le bureau COSMIC
+comment = Émulateur de terminal pour le bureau WMDE
 keywords = Commande;Shell;Terminal;CLI;
 tab-new-inherit-working-directory = Les nouveaux onglets et fenêtres utilisent le répertoire actuel
 tab-new-inherit-working-directory-description = Ouvrir les nouveaux onglets et fenêtres dans le répertoire de travail de l'onglet actif

@@ -1,4 +1,4 @@
-cosmic-terminal = Teirminéal COSMIC
+wmde-terminal = Teirminéal WMDE
 new-terminal = Teirminéal nua
 
 # Context Pages
@@ -108,7 +108,7 @@ split-vertical = Scoilt ingearach
 pane-toggle-maximize = Scoránaigh uasmhéadú
 menu-color-schemes = Scéimeanna dathanna...
 menu-settings = Socruithe...
-menu-about = Maidir le COSMIC Teirminéal...
+menu-about = Maidir le WMDE Teirminéal...
 repository = Stór
 support = Tacaíocht
 open-link = Oscail an Nasc
@@ -144,7 +144,7 @@ shortcut-replace-title = Aicearra a athsholáthar?
 tab-activate = Gníomhachtaigh an cluaisín { $number }
 toggle-fullscreen = Scoraigh lánscáileán
 type-to-search = Clóscríobh le cuardach a dhéanamh...
-comment = Aithriseoir teirminéal don deasc COSMIC
+comment = Aithriseoir teirminéal don deasc WMDE
 keywords = Ordú;Blaosc;Teirminéal;CLI;
 copy-link = Cóipeáil Nasc
 tab-new-inherit-working-directory = Úsáideann cluaisíní nua an eolaire reatha

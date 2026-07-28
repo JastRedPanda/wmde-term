@@ -1,5 +1,5 @@
-cosmic-terminal = WMDE Terminal
-comment = Terminalemulator för skrivbordsmiljön COSMIC
+wmde-terminal = WMDE Terminal
+comment = Terminalemulator för skrivbordsmiljön WMDE
 keywords = Kommando;Skal;Terminal;CLI;Konsol;
 new-terminal = Ny terminal
 

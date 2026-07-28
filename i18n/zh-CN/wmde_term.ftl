@@ -1,4 +1,4 @@
-cosmic-terminal = COSMIC 终端
+wmde-terminal = WMDE 终端
 new-terminal = 新建终端
 
 # Context Pages
@@ -108,7 +108,7 @@ split-vertical = 垂直分割
 pane-toggle-maximize = 切换最大化
 menu-color-schemes = 配色方案…
 menu-settings = 设置…
-menu-about = 关于 COSMIC 终端…
+menu-about = 关于 WMDE 终端…
 repository = 仓库
 support = 支持
 open-link = 打开链接
@@ -144,7 +144,7 @@ shortcut-replace-body = { $binding } 已分配给 { $existing }。是否将其�
 shortcut-replace-title = 是否替换快捷键？
 tab-activate = 启用标签 { $number }
 toggle-fullscreen = 切换全屏
-comment = COSMIC 桌面的终端模拟器
+comment = WMDE 桌面的终端模拟器
 keywords = 指令;外壳;终端;命令行界面;
 copy-link = 复制链接
 tab-new-inherit-working-directory = 新标签和窗口使用当前目录

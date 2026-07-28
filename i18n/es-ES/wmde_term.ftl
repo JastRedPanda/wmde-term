@@ -1,5 +1,5 @@
-cosmic-terminal = Terminal COSMIC
-comment = Emulador de terminal de escritorio COSMIC
+wmde-terminal = Terminal WMDE
+comment = Emulador de terminal de escritorio WMDE
 keywords = Comando;Shell;Terminal;Consola;
 new-terminal = Nuevo terminal
 
@@ -111,6 +111,6 @@ split-vertical = División vertical
 pane-toggle-maximize = Cambiar maximización
 menu-color-schemes = Esquemas de color...
 menu-settings = Ajustes...
-menu-about = Sobre Terminal COSMIC...
+menu-about = Sobre Terminal WMDE...
 repository = Repositorio
 support = Apoyo

@@ -1,4 +1,4 @@
-cosmic-terminal = WMDE Terminal
+wmde-terminal = WMDE Terminal
 new-terminal = Ny terminal
 settings = Innstillingar
 name = Namn

@@ -161,13 +161,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let (config_handler, config) = match cosmic_config::Config::new(App::APP_ID, CONFIG_VERSION) {
         Ok(config_handler) => {
-            let config = match Config::get_entry(&config_handler) {
+            let mut config = match Config::get_entry(&config_handler) {
                 Ok(ok) => ok,
                 Err((errs, config)) => {
                     log::info!("errors loading config: {:?}", errs);
                     config
                 }
             };
+            // WMDE: carry configs written before the built-in schemes were renamed.
+            if config.migrate_theme_names()
+                && let Err(err) = config.write_entry(&config_handler)
+            {
+                log::warn!("failed to persist the color scheme rename: {}", err);
+            }
             (Some(config_handler), config)
         }
         Err(err) => {
@@ -211,7 +217,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         term_config,
     };
 
-    // Run the cosmic app
+    // Run the app
     cosmic::app::run::<App>(settings, flags)?;
 
     Ok(())
@@ -801,9 +807,9 @@ impl App {
             let (header_title, window_title) = match tab_model.text(tab_model.active()) {
                 Some(tab_title) => (
                     tab_title.to_string(),
-                    format!("{tab_title} — {}", fl!("cosmic-terminal")),
+                    format!("{tab_title} — {}", fl!("wmde-terminal")),
                 ),
-                None => (String::new(), fl!("cosmic-terminal")),
+                None => (String::new(), fl!("wmde-terminal")),
             };
             // WMDE: the title-bar tab already carries this text, so the centre title would
             // only repeat it. The window title (taskbar, window list) is unaffected.
@@ -825,7 +831,7 @@ impl App {
             log::error!("Failed to get the specific pane");
             Task::batch([
                 if let Some(window_id) = self.core.main_window_id() {
-                    self.set_window_title(fl!("cosmic-terminal"), window_id)
+                    self.set_window_title(fl!("wmde-terminal"), window_id)
                 } else {
                     Task::none()
                 },
@@ -1577,9 +1583,9 @@ impl App {
                     .or_else(|| match color_scheme_kind {
                         ColorSchemeKind::Dark => self
                             .themes
-                            .get(&(config::COSMIC_THEME_DARK.to_string(), ColorSchemeKind::Dark)),
+                            .get(&(config::WMDE_THEME_DARK.to_string(), ColorSchemeKind::Dark)),
                         ColorSchemeKind::Light => self.themes.get(&(
-                            config::COSMIC_THEME_LIGHT.to_string(),
+                            config::WMDE_THEME_LIGHT.to_string(),
                             ColorSchemeKind::Light,
                         )),
                     });
@@ -1676,7 +1682,7 @@ impl App {
                                     // in this specific case as it would unfocus the new tab
                                     // created by TabNewNoProfile
                                     // TabClose can also cause the terminal app to close if it
-                                    // closes the only open tab. This would close cosmic term
+                                    // closes the only open tab. This would close the terminal
                                     // if launched with an invalid profile (issue #274)
                                     tab_model.remove(entity);
                                     return self.update(Message::TabNewNoProfile);
@@ -1788,7 +1794,7 @@ fn wmde_tab_style() -> style::SegmentedButton {
     }))
 }
 
-/// Implement [`Application`] to integrate with COSMIC.
+/// Implement [`Application`] to integrate with WMDE.
 impl Application for App {
     /// Default async executor to use with the app.
     type Executor = executor::Default;
@@ -1926,7 +1932,7 @@ impl Application for App {
         terminal_ids.insert(pane_model.focused(), widget::Id::unique());
 
         let about = About::default()
-            .name(fl!("cosmic-terminal"))
+            .name(fl!("wmde-terminal"))
             .icon(widget::icon::from_name(Self::APP_ID))
             .version(env!("CARGO_PKG_VERSION"))
             .author("WMDE")
@@ -2160,11 +2166,11 @@ impl Application for App {
                             let color_scheme = match color_scheme_kind {
                                 ColorSchemeKind::Dark => ColorScheme::from((
                                     name.as_str(),
-                                    &terminal_theme::cosmic_dark(),
+                                    &terminal_theme::wmde_dark(),
                                 )),
                                 ColorSchemeKind::Light => ColorScheme::from((
                                     name.as_str(),
-                                    &terminal_theme::cosmic_light(),
+                                    &terminal_theme::wmde_light(),
                                 )),
                             };
                             //TODO: do not duplicate code

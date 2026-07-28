@@ -1,4 +1,4 @@
-cosmic-terminal = WMDE Terminal
+wmde-terminal = WMDE Terminal
 new-terminal = Nieuwe terminal
 
 # Context Pages
@@ -124,7 +124,7 @@ passwords-title = Wachtwoorden
 add-password = Wachtwoord toevoegen
 password-input = Wachtwoord
 password-input-description = Beschrijving
-comment = Terminalemulator voor COSMIC
+comment = Terminalemulator voor WMDE
 keywords = Commando;Shell;Terminal;CLI;
 copy-or-sigint = Kopiëren of SIGINT
 disable = Uitschakelen

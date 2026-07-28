@@ -1,5 +1,5 @@
-cosmic-terminal = Terminale COSMIC
-comment = Emulatore di terminale di COSMIC
+wmde-terminal = Terminale WMDE
+comment = Emulatore di terminale di WMDE
 keywords = Comando;Shell;Terminale;Console;
 new-terminal = Nuovo terminale
 

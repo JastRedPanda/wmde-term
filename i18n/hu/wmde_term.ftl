@@ -1,5 +1,5 @@
-cosmic-terminal = COSMIC Terminál
-comment = Terminálemulátor a COSMIC asztali környezethez
+wmde-terminal = WMDE Terminál
+comment = Terminálemulátor a WMDE asztali környezethez
 keywords = parancssor;héj;terminál;CLI;
 new-terminal = Új terminál
 
@@ -112,7 +112,7 @@ split-vertical = Függőleges felosztás
 pane-toggle-maximize = Panel maximalizálása
 menu-color-schemes = Színsémák…
 menu-settings = Beállítások…
-menu-about = A COSMIC Terminál névjegye…
+menu-about = A WMDE Terminál névjegye…
 menu-password-manager = Jelszavak…
 passwords-title = Jelszavak
 add-password = Jelszó hozzáadása

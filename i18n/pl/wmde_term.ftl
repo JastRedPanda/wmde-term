@@ -1,5 +1,5 @@
-cosmic-terminal = Terminal COSMIC
-comment = Emulator terminala dla pulpitu COSMIC
+wmde-terminal = Terminal WMDE
+comment = Emulator terminala dla pulpitu WMDE
 keywords = Cli;WierszPoleceń;Powłoka;Terminal;
 new-terminal = Nowy terminal
 
@@ -112,7 +112,7 @@ split-vertical = Podziel w pionie
 pane-toggle-maximize = Przełącznik maksymalizacji
 menu-color-schemes = Schemat kolorów...
 menu-settings = Ustawienia…
-menu-about = O Terminalu COSMIC...
+menu-about = O Terminalu WMDE...
 menu-password-manager = Hasła…
 passwords-title = Hasła
 add-password = Dodaj Hasło

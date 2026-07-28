@@ -1,4 +1,4 @@
-cosmic-terminal = COSMIC Терминал
+wmde-terminal = WMDE Терминал
 new-terminal = Нови терминал
 
 # Context Pages
@@ -104,7 +104,7 @@ split-vertical = Подели вертикално
 pane-toggle-maximize = Максимизуј
 menu-color-schemes = Шеме боја...
 menu-settings = Подешавања...
-menu-about = О COSMIC Терминалу...
+menu-about = О WMDE Терминалу...
 repository = Репозиторијум
 support = Подршка
 working-directory = Тренутни директоријум

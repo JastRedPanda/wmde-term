@@ -6,7 +6,7 @@ use hex_color::HexColor;
 use std::{collections::HashMap, fs};
 
 use crate::config::{
-    COSMIC_THEME_DARK, COSMIC_THEME_LIGHT, ColorScheme, ColorSchemeAnsi, ColorSchemeKind,
+    WMDE_THEME_DARK, WMDE_THEME_LIGHT, ColorScheme, ColorSchemeAnsi, ColorSchemeKind,
 };
 
 fn auto_colors() -> Colors {
@@ -145,7 +145,7 @@ impl From<(&str, &Colors)> for ColorScheme {
     }
 }
 
-pub fn cosmic_dark() -> Colors {
+pub fn wmde_dark() -> Colors {
     let mut colors = auto_colors();
 
     let encode_rgb = |data: u32| -> Rgb {
@@ -193,7 +193,7 @@ pub fn cosmic_dark() -> Colors {
     colors
 }
 
-pub fn cosmic_light() -> Colors {
+pub fn wmde_light() -> Colors {
     let mut colors = auto_colors();
 
     let encode_rgb = |data: u32| -> Rgb {
@@ -245,12 +245,12 @@ pub fn cosmic_light() -> Colors {
 pub fn terminal_themes() -> HashMap<(String, ColorSchemeKind), Colors> {
     let mut themes = HashMap::new();
     themes.insert(
-        (COSMIC_THEME_DARK.to_string(), ColorSchemeKind::Dark),
-        cosmic_dark(),
+        (WMDE_THEME_DARK.to_string(), ColorSchemeKind::Dark),
+        wmde_dark(),
     );
     themes.insert(
-        (COSMIC_THEME_LIGHT.to_string(), ColorSchemeKind::Light),
-        cosmic_light(),
+        (WMDE_THEME_LIGHT.to_string(), ColorSchemeKind::Light),
+        wmde_light(),
     );
     themes
 }

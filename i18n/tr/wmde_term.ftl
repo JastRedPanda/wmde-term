@@ -1,4 +1,4 @@
-cosmic-terminal = COSMIC Uçbirim
+wmde-terminal = WMDE Uçbirim
 new-terminal = Yeni uçbirim
 
 # Context Pages
@@ -104,14 +104,14 @@ split-vertical = Dikey böl
 pane-toggle-maximize = Tam ekrana geç
 menu-color-schemes = Renk şemaları...
 menu-settings = Ayarlar...
-menu-about = COSMIC Uçbirim hakkında...
+menu-about = WMDE Uçbirim hakkında...
 repository = Depo
 support = Destek
 working-directory = Çalışma dizini
 hold = Tut
 remain-open = Alt süreç bittikten sonra açık kal.
 clear-scrollback = Kaydırma geçmişini temizle
-comment = COSMIC masaüstü için Uçbirim emülatörü
+comment = WMDE masaüstü için Uçbirim emülatörü
 keywords = Komut;Kabuk;Uçbirim;Komut satırı arayüzü;
 add-another-keybinding = Başka bir tuş ataması ekle
 cancel = Vazgeç

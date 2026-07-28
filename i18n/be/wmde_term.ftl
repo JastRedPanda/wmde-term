@@ -1,4 +1,4 @@
-cosmic-terminal = Тэрмінал COSMIC
+wmde-terminal = Тэрмінал WMDE
 new-terminal = Новы тэрмінал
 
 # Context Pages
@@ -107,7 +107,7 @@ split-vertical = Падзяліць па вертыкалі
 pane-toggle-maximize = Пераключыць разгорнутасць
 menu-color-schemes = Колеравыя схемы...
 menu-settings = Налады...
-menu-about = Пра Тэрмінал COSMIC...
+menu-about = Пра Тэрмінал WMDE...
 repository = Рэпазіторый
 support = Падтрымка
 cancel = Скасаваць

@@ -60,7 +60,7 @@ dev *args:
 
 # Run with debug logs
 run *args:
-    env RUST_LOG=cosmic_term=debug RUST_BACKTRACE=full cargo run --release {{args}}
+    env RUST_LOG=wmde_term=debug RUST_BACKTRACE=full cargo run --release {{args}}
 
 # Installs files
 install:

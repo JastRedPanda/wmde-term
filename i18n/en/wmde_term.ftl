@@ -1,5 +1,5 @@
-cosmic-terminal = WMDE Terminal
-comment = Terminal emulator for the COSMIC desktop
+wmde-terminal = WMDE Terminal
+comment = Terminal emulator for the WMDE desktop
 keywords = Command;Shell;Terminal;CLI;
 new-terminal = New terminal
 

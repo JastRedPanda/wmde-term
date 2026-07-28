@@ -1,4 +1,4 @@
-cosmic-terminal = COSMICin pääte
+wmde-terminal = WMDEin pääte
 new-terminal = Uusi pääte
 
 # Context Pages
@@ -110,8 +110,8 @@ split-vertical = Halkaise näkymä pystysuunnassa
 pane-toggle-maximize = Suurennus päällä tai pois
 menu-color-schemes = Väriteemat…
 menu-settings = Asetukset…
-menu-about = Tietoa COSMICin päätteestä…
-comment = Pääte-emulaattori COSMIC-työpöydälle
+menu-about = Tietoa WMDEin päätteestä…
+comment = Pääte-emulaattori WMDE-työpöydälle
 keywords = Command;Shell;Terminal;CLI;Komento;Komentotulkki;Pääte;Terminaali;Komentorivi;
 replace = Korvaa
 disable = Poista käytöstä

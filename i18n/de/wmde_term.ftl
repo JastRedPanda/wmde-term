@@ -1,4 +1,4 @@
-cosmic-terminal = WMDE Terminal
+wmde-terminal = WMDE Terminal
 new-terminal = Neues Terminal
 
 # Kontextseiten
@@ -142,7 +142,7 @@ close-window = Fenster schließen
 copy-or-sigint = Kopieren oder SIGINT
 toggle-fullscreen = Vollbild umschalten
 shortcut-group-zoom = Zoom
-comment = Terminalemulator für den COSMIC Desktop
+comment = Terminalemulator für den WMDE Desktop
 paste-primary = Primär einfügen
 add-another-keybinding = Weitere Tastenbelegung hinzufügen
 shortcut-replace-body = { $binding } ist bereits { $existing } zugeordnet. Durch { $new_action } ersetzen?

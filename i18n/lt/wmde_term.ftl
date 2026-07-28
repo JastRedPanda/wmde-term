@@ -1,6 +1,6 @@
 name = Pavadinimas
 delete = Ištrinti
-cosmic-terminal = WMDE Terminal
+wmde-terminal = WMDE Terminal
 new-terminal = Naujas terminalas
 repository = Saugykla
 support = Palaikymas
@@ -75,7 +75,7 @@ default-font-stretch = Šrifto tempimas
 password-input-description = Aprašymas
 dark = Tamsus
 light = Šviesus
-comment = COSMIC desktop terminalo emuliatorius
+comment = WMDE desktop terminalo emuliatorius
 keywords = Komanda;Shell;Terminalas;CLI;
 add-another-keybinding = Pridėti kitą klavišų derinį
 cancel = Atšaukti

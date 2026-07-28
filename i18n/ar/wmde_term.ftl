@@ -1,5 +1,5 @@
-cosmic-terminal = طرفية COSMIC
-comment = محاكي طرفي لسطح مكتب COSMIC
+wmde-terminal = طرفية WMDE
+comment = محاكي طرفي لسطح مكتب WMDE
 keywords = cli;طرفية;أوامر;صدفة;أمر;
 new-terminal = طرفية جديدة
 
@@ -112,7 +112,7 @@ split-vertical = اقسم عموديًا
 pane-toggle-maximize = بدِّل التكبير
 menu-color-schemes = مخططات الألوان...
 menu-settings = الإعدادات...
-menu-about = حول طرفية COSMIC...
+menu-about = حول طرفية WMDE...
 passwords-title = كلمات السر
 add-password = أضف كلمة سر
 open-link = افتح الرابط

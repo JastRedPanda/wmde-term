@@ -14,8 +14,12 @@ use std::sync::OnceLock;
 use crate::{fl, localize::LANGUAGE_SORTER, shortcuts::Shortcuts};
 
 pub const CONFIG_VERSION: u64 = 1;
-pub const COSMIC_THEME_DARK: &str = "COSMIC Dark";
-pub const COSMIC_THEME_LIGHT: &str = "COSMIC Light";
+pub const WMDE_THEME_DARK: &str = "WMDE Dark";
+pub const WMDE_THEME_LIGHT: &str = "WMDE Light";
+// WMDE: what the built-in color schemes were called before the rebrand. Configs written by an
+// older build still name them, so they are migrated on load - see `Config::migrate_theme_names`.
+const LEGACY_THEME_DARK: &str = "COSMIC Dark";
+const LEGACY_THEME_LIGHT: &str = "COSMIC Light";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum AppTheme {
@@ -207,8 +211,8 @@ impl Default for Profile {
         Self {
             name: fl!("new-profile"),
             command: String::new(),
-            syntax_theme_dark: COSMIC_THEME_DARK.to_string(),
-            syntax_theme_light: COSMIC_THEME_LIGHT.to_string(),
+            syntax_theme_dark: WMDE_THEME_DARK.to_string(),
+            syntax_theme_light: WMDE_THEME_LIGHT.to_string(),
             tab_title: String::new(),
             working_directory: String::new(),
             drain_on_exit: false,
@@ -260,8 +264,8 @@ impl Default for Config {
             opacity: 100,
             profiles: BTreeMap::new(),
             show_headerbar: true,
-            syntax_theme_dark: COSMIC_THEME_DARK.to_string(),
-            syntax_theme_light: COSMIC_THEME_LIGHT.to_string(),
+            syntax_theme_dark: WMDE_THEME_DARK.to_string(),
+            syntax_theme_light: WMDE_THEME_LIGHT.to_string(),
             use_bright_bold: false,
             default_profile: None,
             shortcuts_custom: Shortcuts::default(),
@@ -270,6 +274,31 @@ impl Default for Config {
 }
 
 impl Config {
+    // WMDE: the built-in color schemes were renamed COSMIC Dark/Light -> WMDE Dark/Light. A
+    // config written before that still points at the old names, and since the name is what the
+    // scheme is looked up by, the terminal would silently fall back to the built-in and the
+    // settings dropdown would show nothing selected. Rewrite the two names in place - globally
+    // and per profile - and report whether anything changed, so the caller can persist it.
+    pub fn migrate_theme_names(&mut self) -> bool {
+        fn rename(name: &mut String) -> bool {
+            let new = match name.as_str() {
+                LEGACY_THEME_DARK => WMDE_THEME_DARK,
+                LEGACY_THEME_LIGHT => WMDE_THEME_LIGHT,
+                _ => return false,
+            };
+            *name = new.to_string();
+            true
+        }
+
+        let mut changed = rename(&mut self.syntax_theme_dark);
+        changed |= rename(&mut self.syntax_theme_light);
+        for profile in self.profiles.values_mut() {
+            changed |= rename(&mut profile.syntax_theme_dark);
+            changed |= rename(&mut profile.syntax_theme_light);
+        }
+        changed
+    }
+
     pub fn color_schemes(
         &self,
         color_scheme_kind: ColorSchemeKind,

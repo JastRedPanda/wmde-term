@@ -1,5 +1,5 @@
-cosmic-terminal = Terminál COSMIC
-comment = Emulátor terminálu pre pracovné prostredie COSMIC
+wmde-terminal = Terminál WMDE
+comment = Emulátor terminálu pre pracovné prostredie WMDE
 keywords = Príkaz;Shell;Terminál;Konzola;
 new-terminal = Nový terminál
 
@@ -110,6 +110,6 @@ split-vertical = Rozdeliť vertikálne
 pane-toggle-maximize = Prepnúť maximalizáciu
 menu-color-schemes = Farebné schémy...
 menu-settings = Nastavenia...
-menu-about = O Termináli COSMIC...
+menu-about = O Termináli WMDE...
 repository = Repozitár
 support = Podpora

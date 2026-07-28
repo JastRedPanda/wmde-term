@@ -1,4 +1,4 @@
-cosmic-terminal = कॉस्मिक टर्मिनल
+wmde-terminal = कॉस्मिक टर्मिनल
 new-terminal = नया टर्मिनल
 
 ## About

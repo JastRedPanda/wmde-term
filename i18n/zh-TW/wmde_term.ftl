@@ -1,4 +1,4 @@
-cosmic-terminal = COSMIC 終端機
+wmde-terminal = WMDE 終端機
 new-terminal = 新建終端機
 
 # Context Pages
@@ -107,7 +107,7 @@ split-vertical = 垂直分割
 pane-toggle-maximize = 切換最大化
 menu-color-schemes = 配色方案...
 menu-settings = 設定...
-menu-about = 關於 COSMIC 終端機…
+menu-about = 關於 WMDE 終端機…
 cancel = 取消
 repository = 軟體庫源
 support = 支援
@@ -146,6 +146,6 @@ type-to-search = 輸入進行搜尋...
 copy-link = 複製連結
 shortcut-replace-body = { $binding } 已經分配至 { $existing }。 要取代它為 { $new_action }?
 clear-scrollback = 清除捲動回朔
-comment = COSMIC 桌面終端機模擬器
+comment = WMDE 桌面終端機模擬器
 tab-new-inherit-working-directory = 新分頁和視窗使用目前目錄
 tab-new-inherit-working-directory-description = 在作用中分頁的工作目錄開啟新分頁和視窗
