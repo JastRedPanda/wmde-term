@@ -786,6 +786,14 @@ impl App {
         }
     }
 
+    // WMDE: browser-style tabs live in the title bar, like wmde-files, but only while the
+    // window is a single pane. A split gives every pane its own tab set and there is just one
+    // title bar, so the strips move back into the panes and it stays clear whose tabs are
+    // whose. With the header bar hidden there is nowhere to put them either.
+    fn wmde_tabs_in_header(&self) -> bool {
+        self.core.window.show_headerbar && self.pane_model.panes.iter().count() == 1
+    }
+
     // Call this any time the tab changes
     fn update_title(&mut self, pane: Option<pane_grid::Pane>) -> Task<Message> {
         let pane = pane.unwrap_or(self.pane_model.focused());
@@ -796,6 +804,13 @@ impl App {
                     format!("{tab_title} — {}", fl!("cosmic-terminal")),
                 ),
                 None => (String::new(), fl!("cosmic-terminal")),
+            };
+            // WMDE: the title-bar tab already carries this text, so the centre title would
+            // only repeat it. The window title (taskbar, window list) is unaffected.
+            let header_title = if self.wmde_tabs_in_header() {
+                String::new()
+            } else {
+                header_title
             };
             self.set_header_title(header_title);
             Task::batch([
@@ -1691,6 +1706,72 @@ impl App {
         }
         self.update_title(Some(pane))
     }
+}
+
+// WMDE: Explorer chrome colors, read from the active palette rather than hardcoded, so the
+// light theme renders correctly too. The menu row and the active tab sit one container layer
+// above the body (primary), which is what keeps the strip distinct in either theme; the WMDE
+// palette carries the Win11 blue on that layer. The transparent variants are picked when the
+// theme is frosted, so a translucent terminal keeps its blur.
+fn wmde_menubar(theme: &cosmic::Theme) -> Color {
+    Color::from(theme.cosmic().primary(theme.transparent).base)
+}
+
+// WMDE: container background helper for the menu row, which sits under the title bar.
+fn wmde_menubar_container() -> style::Container<'static> {
+    style::Container::custom(|theme| cosmic::iced::widget::container::Style {
+        background: Some(iced::Background::Color(wmde_menubar(theme))),
+        ..Default::default()
+    })
+}
+
+// WMDE: Win11-style tabs - the active tab uses the menu-row color so it connects to the strip
+// below it, rounded only on top, no accent underline, neutral text. Shared by the title-bar
+// strip and the per-pane strip so a split window looks the same as a plain one.
+fn wmde_tab_style() -> style::SegmentedButton {
+    use cosmic::widget::segmented_button::{Appearance, ItemAppearance, ItemStatusAppearance};
+    style::SegmentedButton::Custom(Box::new(|theme| {
+        let cosmic = theme.cosmic();
+        let rad = cosmic.corner_radii.radius_s;
+        let top_round = iced::border::Radius::from([rad[0], rad[1], 0.0, 0.0]);
+        let body = wmde_menubar(theme);
+        let on = Color::from(cosmic.background(theme.transparent).on);
+        let on_dim = Color::from(cosmic.background(theme.transparent).component.on);
+        let item = |radius| ItemAppearance {
+            border: iced::Border {
+                radius,
+                ..Default::default()
+            },
+        };
+        let active = ItemStatusAppearance {
+            background: Some(iced::Background::Color(body)),
+            first: item(top_round),
+            middle: item(top_round),
+            last: item(top_round),
+            text_color: on,
+        };
+        Appearance {
+            background: None,
+            border: iced::Border::default(),
+            active_width: 0.0,
+            active,
+            inactive: ItemStatusAppearance {
+                background: None,
+                text_color: on_dim,
+                ..active
+            },
+            hover: ItemStatusAppearance {
+                background: Some(iced::Background::Color(Color { a: 0.5, ..body })),
+                text_color: on,
+                ..active
+            },
+            pressed: ItemStatusAppearance {
+                background: Some(iced::Background::Color(body)),
+                text_color: on,
+                ..active
+            },
+        }
+    }))
 }
 
 /// Implement [`Application`] to integrate with COSMIC.
@@ -2773,7 +2854,10 @@ impl Application for App {
             Message::ShowHeaderBar(show_headerbar) => {
                 if show_headerbar != self.config.show_headerbar {
                     config_set!(show_headerbar, show_headerbar);
-                    return self.update_config();
+                    let config_task = self.update_config();
+                    // WMDE: the title-bar tab strip comes and goes with the header bar, and it
+                    // carries the title, so the centre title has to follow it.
+                    return Task::batch([config_task, self.update_title(None)]);
                 }
             }
             Message::TabNewInheritWorkingDirectory(tab_new_inherit_working_directory) => {
@@ -3388,17 +3472,43 @@ impl Application for App {
     }
 
     fn header_start(&self) -> Vec<Element<'_, Self::Message>> {
-        vec![menu_bar(&self.core, &self.config, &self.key_binds)]
+        // WMDE: browser-style tabs at the left of the CSD title bar (Win11-like), with the
+        // new-tab button right after them. The menu moved to a strip of its own below.
+        if !self.wmde_tabs_in_header() {
+            return Vec::new();
+        }
+        let Some(tab_model) = self.pane_model.active() else {
+            return Vec::new();
+        };
+        let cosmic_theme::Spacing { space_xxs, .. } = self.core().system_theme().cosmic().spacing;
+        let pane = self.pane_model.focused();
+        vec![
+            widget::row::with_children(vec![
+                widget::tab_bar::horizontal(tab_model)
+                    .button_height(32)
+                    .button_spacing(space_xxs)
+                    .style(wmde_tab_style())
+                    .enable_tab_drag(String::from("x-wmde-term/tab"))
+                    .on_reorder(move |event| Message::ReorderTab(pane, event))
+                    .tab_drag_threshold(25.)
+                    .on_activate(Message::TabActivate)
+                    .on_close(|entity| Message::TabClose(Some(entity)))
+                    .width(Length::Shrink)
+                    .into(),
+                widget::button::custom(icon_cache_get("list-add-symbolic", 16))
+                    .on_press(Message::TabNew)
+                    .padding(8)
+                    .class(style::Button::Icon)
+                    .into(),
+            ])
+            .align_y(Alignment::Center)
+            .into(),
+        ]
     }
 
     fn header_end(&self) -> Vec<Element<'_, Self::Message>> {
-        vec![
-            widget::button::custom(icon_cache_get("list-add-symbolic", 16))
-                .on_press(Message::TabNew)
-                .padding(8)
-                .class(style::Button::Icon)
-                .into(),
-        ]
+        // WMDE: the new-tab button sits next to the tabs in header_start now
+        Vec::new()
     }
 
     fn on_close_requested(&self, id: window::Id) -> Option<Self::Message> {
@@ -3433,10 +3543,14 @@ impl Application for App {
         let cosmic = t.cosmic();
         let cosmic_theme::Spacing { space_xxs, .. } = cosmic.spacing;
 
+        // WMDE: with a single pane the tabs are up in the title bar, so the per-pane strip is
+        // only drawn for split windows (and when the header bar is hidden entirely).
+        let tabs_in_header = self.wmde_tabs_in_header();
+
         let pane_grid = PaneGrid::new(&self.pane_model.panes, |pane, tab_model, _is_maximized| {
             let mut tab_column = widget::column::with_capacity(1);
 
-            if tab_model.iter().count() > 1 {
+            if !tabs_in_header && tab_model.iter().count() > 1 {
                 tab_column = tab_column.push(
                     widget::container(
                         widget::tab_bar::horizontal(tab_model)
@@ -3445,6 +3559,7 @@ impl Application for App {
                             .tab_drag_threshold(25.)
                             .button_height(32)
                             .button_spacing(space_xxs)
+                            .style(wmde_tab_style())
                             .on_activate(Message::TabActivate)
                             .on_close(|entity| Message::TabClose(Some(entity))),
                     )
@@ -3622,7 +3737,23 @@ impl Application for App {
         .on_drag(Message::PaneDragged);
 
         //TODO: apply window border radius xs at bottom of window
-        pane_grid.into()
+        if !self.core.window.show_headerbar {
+            // Nothing to hang a menu strip under - this mode is meant to be a bare terminal.
+            return pane_grid.into();
+        }
+
+        // WMDE: full-width menu strip under the title bar, like wmde-files. It shares the
+        // active tab's color, so the tab reads as connected to the strip.
+        widget::column::with_children(vec![
+            widget::container(menu_bar(&self.core, &self.config, &self.key_binds))
+                .class(wmde_menubar_container())
+                .width(Length::Fill)
+                .into(),
+            pane_grid.into(),
+        ])
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 
     fn system_theme_update(
