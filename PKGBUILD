@@ -16,7 +16,7 @@ options=('!debug')
 # depends: readelf-NEEDED core libs + the libcosmic runtime set (wayland/mesa/fontconfig/
 # freetype2 are dlopen'd by libcosmic at runtime). Verify with namcap.
 depends=('glibc' 'gcc-libs' 'glib2' 'libxkbcommon' 'wayland' 'mesa' 'fontconfig' 'freetype2')
-optdepends=('wmde-icons: WMDE icon theme')
+optdepends=('wmde-icons-base: WMDE icon theme')
 # makedepends: same toolchain/libs that build the fork in Docker + glib2.
 makedepends=('rust' 'cargo' 'git' 'clang' 'lld' 'pkgconf' 'glib2' 'mesa' 'wayland'
              'libxkbcommon' 'fontconfig' 'freetype2' 'expat' 'zstd')
