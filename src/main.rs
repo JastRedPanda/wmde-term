@@ -1717,8 +1717,7 @@ fn wmde_menubar(theme: &cosmic::Theme) -> Color {
     Color::from(theme.cosmic().primary(theme.transparent).base)
 }
 
-// WMDE: the new-tab button. It follows the tabs into the title bar, and falls back to the
-// right end of the header when the tabs are inside the panes.
+// WMDE: the new-tab button, at the right end of the header in every state.
 fn wmde_new_tab_button<'a>() -> Element<'a, Message> {
     widget::button::custom(icon_cache_get("list-add-symbolic", 16))
         .on_press(Message::TabNew)
@@ -3486,8 +3485,8 @@ impl Application for App {
     }
 
     fn header_start(&self) -> Vec<Element<'_, Self::Message>> {
-        // WMDE: browser-style tabs at the left of the CSD title bar (Win11-like), with the
-        // new-tab button right after them. The menu moved to a strip of its own below.
+        // WMDE: browser-style tabs at the left of the CSD title bar (Win11-like). The menu
+        // moved to a strip of its own below.
         if !self.wmde_tabs_in_header() {
             return Vec::new();
         }
@@ -3497,32 +3496,25 @@ impl Application for App {
         let cosmic_theme::Spacing { space_xxs, .. } = self.core().system_theme().cosmic().spacing;
         let pane = self.pane_model.focused();
         vec![
-            widget::row::with_children(vec![
-                widget::tab_bar::horizontal(tab_model)
-                    .button_height(32)
-                    .button_spacing(space_xxs)
-                    .style(wmde_tab_style())
-                    .enable_tab_drag(String::from("x-wmde-term/tab"))
-                    .on_reorder(move |event| Message::ReorderTab(pane, event))
-                    .tab_drag_threshold(25.)
-                    .on_activate(Message::TabActivate)
-                    .on_close(|entity| Message::TabClose(Some(entity)))
-                    .width(Length::Shrink)
-                    .into(),
-                wmde_new_tab_button(),
-            ])
-            .align_y(Alignment::Center)
-            .into(),
+            widget::tab_bar::horizontal(tab_model)
+                .button_height(32)
+                .button_spacing(space_xxs)
+                .style(wmde_tab_style())
+                .enable_tab_drag(String::from("x-wmde-term/tab"))
+                .on_reorder(move |event| Message::ReorderTab(pane, event))
+                .tab_drag_threshold(25.)
+                .on_activate(Message::TabActivate)
+                .on_close(|entity| Message::TabClose(Some(entity)))
+                .width(Length::Shrink)
+                .into(),
         ]
     }
 
     fn header_end(&self) -> Vec<Element<'_, Self::Message>> {
-        // WMDE: the new-tab button rides with the tabs in header_start, so it is only needed
-        // here in the states that have no title-bar strip - a split window, where the tabs are
-        // back inside the panes and the button would otherwise have nowhere to live.
-        if self.wmde_tabs_in_header() {
-            return Vec::new();
-        }
+        // WMDE: the new-tab button stays at the right end of the header rather than riding
+        // next to the tabs. The header lays its end region out before the start region, so the
+        // button always gets its width; sitting after a Shrink tab strip it would be squeezed
+        // out of existence as soon as the tabs filled the bar.
         vec![wmde_new_tab_button()]
     }
 
