@@ -1858,6 +1858,12 @@ fn wmde_new_tab_button<'a>() -> Element<'a, Message> {
 fn wmde_menubar_container() -> style::Container<'static> {
     style::Container::custom(|theme| cosmic::iced::widget::container::Style {
         background: Some(iced::Background::Color(wmde_menubar(theme))),
+        // WMDE: snap the fill to the pixel grid. The terminal below paints its own background
+        // snapped, so it starts at the rounded-up pixel row; an unsnapped strip ends on the
+        // fractional one, and the sliver between them is covered by neither. With
+        // content_container disabled there is nothing behind the body, so that sliver showed
+        // the desktop - a hairline of whatever sat under the window, right under the menu.
+        snap: true,
         ..Default::default()
     })
 }
