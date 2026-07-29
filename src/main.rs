@@ -297,7 +297,7 @@ pub enum Action {
 impl Action {
     fn message(&self, entity_opt: Option<segmented_button::Entity>) -> Message {
         match self {
-            Self::About => Message::ToggleContextPage(ContextPage::About),
+            Self::About => Message::OpenAbout,
             Self::ClearScrollback => Message::ClearScrollback(entity_opt),
             Self::ColorSchemes(color_scheme_kind) => {
                 Message::ToggleContextPage(ContextPage::ColorSchemes(*color_scheme_kind))
@@ -405,6 +405,7 @@ pub enum Message {
     ShortcutSearch(String),
     MouseEnter(pane_grid::Pane),
     Opacity(u8),
+    OpenAbout,
     PaneClicked(pane_grid::Pane),
     PaneDragged(pane_grid::DragEvent),
     PaneFocusAdjacent(pane_grid::Direction),
@@ -468,7 +469,6 @@ pub enum Message {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ContextPage {
-    About,
     ColorSchemes(ColorSchemeKind),
     KeyboardShortcuts,
     Profiles,
@@ -3350,6 +3350,9 @@ impl Application for App {
                 // Spawn first tab
                 return self.update(Message::TabNew);
             }
+            Message::OpenAbout => {
+                return self.open_about(self.about.clone());
+            }
             Message::ToggleContextPage(context_page) => {
                 if self.context_page == context_page {
                     self.core.window.show_context = !self.core.window.show_context;
@@ -3503,11 +3506,6 @@ impl Application for App {
         }
 
         Some(match self.context_page {
-            ContextPage::About => context_drawer::about(
-                &self.about,
-                |s| Message::LaunchUrl(s.to_string()),
-                Message::ToggleContextPage(ContextPage::About),
-            ),
             ContextPage::ColorSchemes(color_scheme_kind) => context_drawer::context_drawer(
                 self.color_schemes(color_scheme_kind),
                 Message::ToggleContextPage(ContextPage::ColorSchemes(color_scheme_kind)),
