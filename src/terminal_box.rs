@@ -426,8 +426,11 @@ where
                 .radius_s()
                 .map(|x| if x < 4.0 { x - 1.0 } else { x + 3.0 })
         };
-        // When there's a headerbar and no pane border, only round the bottom corners
-        let border_radius: Radius = if self.show_headerbar && self.pane_border_radius.is_none() {
+        // When there's a headerbar, only round the bottom corners. Upstream 1.5 also skips
+        // this when a pane border radius is set, but WMDE draws its own square 1px outline
+        // around each pane (see the pane_content container in main.rs), so rounding the top
+        // corners too would leave a rounded terminal sitting inside a square box.
+        let border_radius: Radius = if self.show_headerbar {
             [0.0, 0.0, corner_radius[2], corner_radius[3]].into()
         } else {
             corner_radius.into()
