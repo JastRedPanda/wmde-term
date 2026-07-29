@@ -434,6 +434,7 @@ pub enum Message {
     SelectAll(Option<segmented_button::Entity>),
     ShowAdvancedFontSettings(bool),
     ShowHeaderBar(bool),
+    ShowPaneBorders(bool),
     SyntaxTheme(ColorSchemeKind, usize),
     SystemThemeChange,
     TabNewInheritWorkingDirectory(bool),
@@ -1644,10 +1645,16 @@ impl App {
             font_section = font_section.add(advanced_font_settings());
         }
 
-        let splits_section = widget::settings::section().title(fl!("splits")).add(
-            widget::settings::item::builder(fl!("focus-follow-mouse"))
-                .toggler(self.config.focus_follow_mouse, Message::FocusFollowMouse),
-        );
+        let splits_section = widget::settings::section()
+            .title(fl!("splits"))
+            .add(
+                widget::settings::item::builder(fl!("focus-follow-mouse"))
+                    .toggler(self.config.focus_follow_mouse, Message::FocusFollowMouse),
+            )
+            .add(
+                widget::settings::item::builder(fl!("show-pane-borders"))
+                    .toggler(self.config.show_pane_borders, Message::ShowPaneBorders),
+            );
 
         let advanced_section = widget::settings::section()
             .title(fl!("advanced"))
@@ -2999,6 +3006,11 @@ impl Application for App {
                     tab_new_inherit_working_directory
                 );
             }
+            Message::ShowPaneBorders(show_pane_borders) => {
+                if show_pane_borders != self.config.show_pane_borders {
+                    config_set!(show_pane_borders, show_pane_borders);
+                }
+            }
             Message::UseBrightBold(use_bright_bold) => {
                 if use_bright_bold != self.config.use_bright_bold {
                     config_set!(use_bright_bold, use_bright_bold);
@@ -3632,7 +3644,11 @@ impl Application for App {
     fn view(&self) -> Element<'_, Self::Message> {
         let t = self.core().system_theme();
         let cosmic = t.cosmic();
-        let cosmic_theme::Spacing { space_xxs, .. } = cosmic.spacing;
+        let cosmic_theme::Spacing {
+            space_xxxs,
+            space_xxs,
+            ..
+        } = cosmic.spacing;
 
         // WMDE: one tab is one layout, so the grid on screen is the ACTIVE tab's.
         let Some(active_tab) = self.active_tab() else {
@@ -3643,8 +3659,16 @@ impl Application for App {
         // WMDE: a tab holding more than one terminal outlines each of them, so the split is
         // visible at rest. iced draws a divider only while the cursor is over it, and the
         // surface behind the grid is the same near black as the terminal, so without this the
-        // panes just butt together with no seam.
-        let split = active_tab.panes.panes.len() > 1;
+        // panes just butt together with no seam. Upstream 1.5 made the same idea configurable,
+        // so the gate is its config key re-anchored on the active tab's own pane layout.
+        let show_pane_borders = self.config.show_pane_borders && active_tab.panes.panes.len() > 1;
+        let pane_corner_radius: iced::border::Radius = {
+            let pad = f32::from(space_xxxs) / 2.0;
+            cosmic
+                .radius_s()
+                .map(|r| if r > 0.0 { r + pad } else { 0.0 })
+                .into()
+        };
 
         let pane_grid = PaneGrid::new(&active_tab.panes, move |pane, terminal, _is_maximized| {
             let mut tab_column = widget::column::with_capacity(1);
@@ -3668,7 +3692,8 @@ impl Application for App {
                     })
                     .padding(space_xxs)
                     .sharp_corners(self.core.window.sharp_corners)
-                    .show_headerbar(self.config.show_headerbar);
+                    .show_headerbar(self.config.show_headerbar)
+                    .pane_border_radius(show_pane_borders.then_some(pane_corner_radius));
 
                 if self.config.focus_follow_mouse {
                     terminal_box = terminal_box.on_mouse_enter(move || Message::MouseEnter(pane));
@@ -3781,7 +3806,7 @@ impl Application for App {
                 // TODO
             }
 
-            let pane_content: Element<'_, Message> = if split {
+            let pane_content: Element<'_, Message> = if show_pane_borders {
                 widget::container(tab_column)
                     .padding(1)
                     .class(style::Container::custom(|theme| {
