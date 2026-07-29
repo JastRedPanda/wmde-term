@@ -5,7 +5,7 @@
 # ../libcosmic (fun.wmde config) and using ../wmde-files's file dialog (compiled in, not a
 # runtime package dep). build.rs/xdgen was dropped; res/ templates are installed directly.
 pkgname=wmde-term
-pkgver=1.4.0
+pkgver=1.5.0
 pkgrel=2
 pkgdesc="WMDE Terminal - terminal emulator for the WMDE desktop (fork of cosmic-term)"
 arch=('x86_64')
@@ -25,13 +25,13 @@ sha256sums=('SKIP')
 
 pkgver() {
   cd "$srcdir/$pkgname"
-  # WMDE unified version: 1.4 (libcosmic base) . <commits since nearest tag> . g<short>.
+  # WMDE unified version: 1.5 (libcosmic base) . <commits since nearest tag> . g<short>.
   local desc
   desc=$(git describe --long --tags --abbrev=7 2>/dev/null || true)
   if [ -n "$desc" ]; then
-    printf '1.4.%s.g%s' "$(printf '%s' "$desc" | sed -E 's/.*-([0-9]+)-g[0-9a-f]+$/\1/')" "$(git rev-parse --short=7 HEAD)"
+    printf '1.5.%s.g%s' "$(printf '%s' "$desc" | sed -E 's/.*-([0-9]+)-g[0-9a-f]+$/\1/')" "$(git rev-parse --short=7 HEAD)"
   else
-    printf '1.4.%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+    printf '1.5.%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
   fi
 }
 
