@@ -1890,6 +1890,10 @@ fn wmde_tab_style(in_pane: bool) -> style::SegmentedButton {
         // light one. A translucent copy of the fill would have made the ACTIVE tab look weaker
         // under the cursor, because libcosmic draws the hover appearance instead of the active
         // one for whichever tab is hovered, active or not.
+        //
+        // The hover step is 0.20, the same nominal strength every other list in WMDE hovers
+        // with (`text_button.hover`, neutral_5 at 20 %). The technique differs because a tab
+        // has to stay opaque - it merges with the menu row - but the strength does not.
         let toward_ink = |t: f32| Color {
             r: body.r + (on.r - body.r) * t,
             g: body.g + (on.g - body.g) * t,
@@ -1927,12 +1931,12 @@ fn wmde_tab_style(in_pane: bool) -> style::SegmentedButton {
                 ..active
             },
             hover: ItemStatusAppearance {
-                background: Some(iced::Background::Color(toward_ink(0.10))),
+                background: Some(iced::Background::Color(toward_ink(0.20))),
                 text_color: on,
                 ..active
             },
             pressed: ItemStatusAppearance {
-                background: Some(iced::Background::Color(toward_ink(0.16))),
+                background: Some(iced::Background::Color(toward_ink(0.26))),
                 text_color: on,
                 ..active
             },
