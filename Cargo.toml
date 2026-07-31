@@ -71,6 +71,17 @@ wgpu = ["libcosmic/wgpu", "cosmic-files/wgpu"]
 wayland = ["libcosmic/wayland", "cosmic-files/wayland"]
 password_manager = ["secret-service", "thiserror", "secstr"]
 
+# WMDE: shared release profile, see .doc/perf.
+#  - panic = "abort" drops .eh_frame and .gcc_except_table; catch_unwind stops catching,
+#    which in this stack only guards SVG parsing in iced's vector backends.
+#  - lto = "fat" with one codegen unit removes what monomorphisation duplicated.
+# The LTO half is expensive and single threaded; FAST=1 turns it off for development
+# builds without touching panic or opt-level, so behaviour still matches what ships.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
 [profile.release-with-debug]
 inherits = "release"
 debug = true
