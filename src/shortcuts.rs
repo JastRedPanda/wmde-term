@@ -267,7 +267,7 @@ pub fn fallback_shortcuts() -> Shortcuts {
     // Standard key bindings
     bind!([Ctrl, Shift], "A", SelectAll);
     bind!([Ctrl, Shift], "C", Copy);
-    bind!([Ctrl], "c", CopyOrSigint);
+    bind!([Ctrl], "C", CopyOrSigint);
     bind!([Ctrl, Shift], "F", Find);
     bind!([Ctrl, Shift], "N", WindowNew);
     bind!([Ctrl, Shift], "Q", WindowClose);
@@ -280,11 +280,11 @@ pub fn fallback_shortcuts() -> Shortcuts {
 
     // Ctrl+Alt+D splits horizontally, Ctrl+Alt+R splits vertically, Ctrl+Shift+X maximizes split
     //TODO: Adjust bindings as desired by UX
-    bind!([Ctrl, Alt], "d", PaneSplitHorizontal);
-    bind!([Ctrl, Alt], "r", PaneSplitVertical);
+    bind!([Ctrl, Alt], "D", PaneSplitHorizontal);
+    bind!([Ctrl, Alt], "R", PaneSplitVertical);
     bind!([Ctrl, Shift], "X", PaneToggleMaximized);
     #[cfg(feature = "password_manager")]
-    bind!([Ctrl, Alt], "p", PasswordManager);
+    bind!([Ctrl, Alt], "P", PasswordManager);
 
     // Ctrl+Tab and Ctrl+Shift+Tab cycle through tabs
     // Ctrl+Tab is not a special key for terminals and is free to use
@@ -373,6 +373,23 @@ mod tests {
             assert!(
                 binding.to_key_bind().is_some(),
                 "default binding {binding:?} for {action:?} does not resolve to a key"
+            );
+        }
+    }
+
+    #[test]
+    fn every_default_key_is_spelled_the_way_capture_spells_it() {
+        // A captured key comes back upper case for single latin letters. A default
+        // spelled any other way could not be replaced by a user binding: the two
+        // would sit side by side in the map and both fire.
+        for (binding, action) in fallback_shortcuts().iter() {
+            let key = cosmic::shortcuts::key_from_string(&binding.key)
+                .unwrap_or_else(|| panic!("{action:?}: key {:?} does not resolve", binding.key));
+            let spelled = cosmic::shortcuts::key_to_string(&key)
+                .unwrap_or_else(|| panic!("{action:?}: key {:?} has no spelling", binding.key));
+            assert_eq!(
+                binding.key, spelled,
+                "{action:?}: a captured key would be stored as {spelled:?}"
             );
         }
     }
