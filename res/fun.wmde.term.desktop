@@ -8,3 +8,9 @@ StartupNotify=true
 Icon=fun.wmde.term
 Categories=System;TerminalEmulator;
 Keywords=Command;Shell;Terminal;CLI;
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New Window
+Name[uk]=Нове вікно
+Exec=wmde-term
