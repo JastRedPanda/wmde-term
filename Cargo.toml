@@ -91,12 +91,3 @@ iced_runtime = { path = "../libcosmic/iced/runtime" }
 iced_widget = { path = "../libcosmic/iced/widget" }
 
 # cosmic-settings-config pins libcosmic crates from the .git and trailing-slash URL variants.
-[patch."https://github.com/pop-os/libcosmic/"]
-cosmic-config = { path = "../libcosmic/cosmic-config" }
-cosmic-theme = { path = "../libcosmic/cosmic-theme" }
-
-[patch."https://github.com/pop-os/libcosmic.git"]
-libcosmic = { path = "../libcosmic" }
-cosmic-config = { path = "../libcosmic/cosmic-config" }
-cosmic-config-derive = { path = "../libcosmic/cosmic-config-derive" }
-cosmic-theme = { path = "../libcosmic/cosmic-theme" }
