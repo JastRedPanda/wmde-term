@@ -5,5 +5,5 @@ use crate::Action;
 use crate::shortcuts::ShortcutsConfig;
 
 pub fn key_binds(shortcuts: &ShortcutsConfig) -> HashMap<KeyBind, Action> {
-    shortcuts.key_binds()
+    crate::shortcuts::key_binds(shortcuts)
 }

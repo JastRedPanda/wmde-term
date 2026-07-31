@@ -181,7 +181,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let shortcuts_config = shortcuts::ShortcutsConfig::new(config.shortcuts_custom.clone());
+    let shortcuts_config = shortcuts::shortcuts_config(config.shortcuts_custom.clone());
 
     let shell = shell_program_opt.map(|shell_program| tty::Shell::new(shell_program, shell_args));
     let startup_options = Some(tty::Options {
@@ -1190,7 +1190,7 @@ impl App {
                 }
                 found_actions = true;
 
-                let (bindings, changed) = self.shortcuts_config.bindings_for_action(action);
+                let (bindings, changed) = self.shortcuts_config.bindings_for_action(&action);
 
                 let mut buttons = widget::row::with_capacity(2);
                 if changed {
@@ -2437,7 +2437,7 @@ impl Application for App {
                     self.config = *config;
                     if shortcuts_changed {
                         self.shortcuts_config =
-                            shortcuts::ShortcutsConfig::new(self.config.shortcuts_custom.clone());
+                            shortcuts::shortcuts_config(self.config.shortcuts_custom.clone());
                         self.key_binds = key_binds(&self.shortcuts_config);
                     }
                     let config_task = self.update_config();
@@ -2687,10 +2687,10 @@ impl Application for App {
 
                 // Handle shortcut capture
                 if let Some(action) = self.shortcut_capture {
-                    if let Some(binding) = shortcuts::binding_from_key(modifiers, key) {
+                    if let Some(binding) = shortcuts::binding_from_key(modifiers, &key) {
                         self.shortcut_capture = None;
                         if let Some(existing_action) =
-                            self.shortcuts_config.action_for_binding(&binding)
+                            self.shortcuts_config.action_for_binding(&binding).copied()
                         {
                             if existing_action != action {
                                 self.begin_shortcut_conflict(ShortcutConflict {
@@ -2789,7 +2789,7 @@ impl Application for App {
                 self.save_shortcuts_custom();
             }
             Message::ShortcutReset(reset_action) => {
-                self.shortcuts_config.reset_action(reset_action);
+                self.shortcuts_config.reset_action(&reset_action);
                 self.save_shortcuts_custom();
             }
             Message::ShortcutSearch(search) => {

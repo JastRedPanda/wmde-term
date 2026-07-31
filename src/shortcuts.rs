@@ -1,57 +1,40 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-use cosmic::widget::menu::key_bind::{KeyBind, Modifier};
-use cosmic::{
-    iced::core::keyboard::key::Named,
-    iced::keyboard::{Key, Modifiers},
-};
+//! Key bindings the terminal handles itself.
+//!
+//! Everything that is not specific to the terminal - how a binding is written,
+//! how the user's map is layered over these defaults, how a combination is
+//! displayed and captured - lives in [`cosmic::shortcuts`] and is shared with the
+//! rest of the stack, so that the settings app can edit this map without knowing
+//! anything about terminals.
+
+use cosmic::shortcuts::{ShortcutAction, ShortcutsConfig as SharedConfig};
+use cosmic::widget::menu::key_bind::KeyBind;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use crate::{Action, fl};
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-pub enum ModifierName {
-    Ctrl,
-    Shift,
-    Alt,
-    Super,
+pub use cosmic::shortcuts::{
+    Binding, BindingSource, ModifierName, binding_display, binding_from_key,
+};
+
+/// The stored map: what goes into the `shortcuts_custom` config key.
+pub type Shortcuts = cosmic::shortcuts::Shortcuts<KeyBindAction>;
+
+/// The user's map layered over [`fallback_shortcuts`].
+pub type ShortcutsConfig = SharedConfig<KeyBindAction>;
+
+/// Builds the runtime configuration from the user's stored map.
+#[must_use]
+pub fn shortcuts_config(custom: Shortcuts) -> ShortcutsConfig {
+    ShortcutsConfig::new(fallback_shortcuts(), custom)
 }
 
-impl ModifierName {
-    fn to_modifier(self) -> Modifier {
-        match self {
-            Self::Ctrl => Modifier::Ctrl,
-            Self::Shift => Modifier::Shift,
-            Self::Alt => Modifier::Alt,
-            Self::Super => Modifier::Super,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct Binding {
-    pub modifiers: Vec<ModifierName>,
-    pub key: String,
-}
-
-impl Binding {
-    fn to_key_bind(&self) -> Option<KeyBind> {
-        let key = key_from_string(&self.key)?;
-        let mut modifiers = Vec::new();
-        for modifier in [
-            ModifierName::Ctrl,
-            ModifierName::Shift,
-            ModifierName::Alt,
-            ModifierName::Super,
-        ] {
-            if self.modifiers.contains(&modifier) {
-                modifiers.push(modifier.to_modifier());
-            }
-        }
-
-        Some(KeyBind { modifiers, key })
-    }
+/// Resolves both maps into the bindings the terminal matches key presses against.
+#[must_use]
+pub fn key_binds(config: &ShortcutsConfig) -> HashMap<KeyBind, Action> {
+    config.key_binds(|action| action.to_action())
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -95,164 +78,61 @@ pub enum KeyBindAction {
     ZoomReset,
 }
 
+impl ShortcutAction for KeyBindAction {
+    fn is_disable(&self) -> bool {
+        matches!(self, Self::Disable)
+    }
+}
+
 impl KeyBindAction {
     fn to_action(self) -> Option<Action> {
-        match self {
-            Self::Disable => None,
-            Self::ClearScrollback => Some(Action::ClearScrollback),
-            Self::Copy => Some(Action::Copy),
-            Self::CopyOrSigint => Some(Action::CopyOrSigint),
-            Self::Find => Some(Action::Find),
-            Self::PaneFocusDown => Some(Action::PaneFocusDown),
-            Self::PaneFocusLeft => Some(Action::PaneFocusLeft),
-            Self::PaneFocusRight => Some(Action::PaneFocusRight),
-            Self::PaneFocusUp => Some(Action::PaneFocusUp),
-            Self::PaneSplitHorizontal => Some(Action::PaneSplitHorizontal),
-            Self::PaneSplitVertical => Some(Action::PaneSplitVertical),
-            Self::PaneToggleMaximized => Some(Action::PaneToggleMaximized),
-            Self::Paste => Some(Action::Paste),
-            Self::PastePrimary => Some(Action::PastePrimary),
-            Self::SelectAll => Some(Action::SelectAll),
-            Self::Settings => Some(Action::Settings),
-            Self::TabActivate0 => Some(Action::TabActivate0),
-            Self::TabActivate1 => Some(Action::TabActivate1),
-            Self::TabActivate2 => Some(Action::TabActivate2),
-            Self::TabActivate3 => Some(Action::TabActivate3),
-            Self::TabActivate4 => Some(Action::TabActivate4),
-            Self::TabActivate5 => Some(Action::TabActivate5),
-            Self::TabActivate6 => Some(Action::TabActivate6),
-            Self::TabActivate7 => Some(Action::TabActivate7),
-            Self::TabActivate8 => Some(Action::TabActivate8),
-            Self::TabClose => Some(Action::TabClose),
-            Self::TabNew => Some(Action::TabNew),
-            Self::TabNext => Some(Action::TabNext),
-            Self::TabPrev => Some(Action::TabPrev),
-            Self::ToggleFullscreen => Some(Action::ToggleFullscreen),
-            Self::WindowClose => Some(Action::WindowClose),
-            Self::WindowNew => Some(Action::WindowNew),
-            Self::ZoomIn => Some(Action::ZoomIn),
-            Self::ZoomOut => Some(Action::ZoomOut),
-            Self::ZoomReset => Some(Action::ZoomReset),
+        Some(match self {
+            Self::Disable => return None,
+            Self::ClearScrollback => Action::ClearScrollback,
+            Self::Copy => Action::Copy,
+            Self::CopyOrSigint => Action::CopyOrSigint,
+            Self::Find => Action::Find,
+            Self::PaneFocusDown => Action::PaneFocusDown,
+            Self::PaneFocusLeft => Action::PaneFocusLeft,
+            Self::PaneFocusRight => Action::PaneFocusRight,
+            Self::PaneFocusUp => Action::PaneFocusUp,
+            Self::PaneSplitHorizontal => Action::PaneSplitHorizontal,
+            Self::PaneSplitVertical => Action::PaneSplitVertical,
+            Self::PaneToggleMaximized => Action::PaneToggleMaximized,
+            Self::Paste => Action::Paste,
+            Self::PastePrimary => Action::PastePrimary,
+            Self::SelectAll => Action::SelectAll,
+            Self::Settings => Action::Settings,
+            Self::TabActivate0 => Action::TabActivate0,
+            Self::TabActivate1 => Action::TabActivate1,
+            Self::TabActivate2 => Action::TabActivate2,
+            Self::TabActivate3 => Action::TabActivate3,
+            Self::TabActivate4 => Action::TabActivate4,
+            Self::TabActivate5 => Action::TabActivate5,
+            Self::TabActivate6 => Action::TabActivate6,
+            Self::TabActivate7 => Action::TabActivate7,
+            Self::TabActivate8 => Action::TabActivate8,
+            Self::TabClose => Action::TabClose,
+            Self::TabNew => Action::TabNew,
+            Self::TabNext => Action::TabNext,
+            Self::TabPrev => Action::TabPrev,
+            Self::ToggleFullscreen => Action::ToggleFullscreen,
+            Self::WindowClose => Action::WindowClose,
+            Self::WindowNew => Action::WindowNew,
+            Self::ZoomIn => Action::ZoomIn,
+            Self::ZoomOut => Action::ZoomOut,
+            Self::ZoomReset => Action::ZoomReset,
             Self::PasswordManager => {
                 #[cfg(feature = "password_manager")]
                 {
-                    Some(Action::PasswordManager)
+                    Action::PasswordManager
                 }
                 #[cfg(not(feature = "password_manager"))]
                 {
-                    None
+                    return None;
                 }
             }
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(transparent)]
-pub struct Shortcuts(pub BTreeMap<Binding, KeyBindAction>);
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BindingSource {
-    Default,
-    Custom,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ResolvedBinding {
-    pub binding: Binding,
-    pub source: BindingSource,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ShortcutsConfig {
-    defaults: Shortcuts,
-    pub custom: Shortcuts,
-}
-
-impl ShortcutsConfig {
-    pub fn new(custom: Shortcuts) -> Self {
-        Self {
-            defaults: fallback_shortcuts(),
-            custom,
-        }
-    }
-
-    pub fn key_binds(&self) -> HashMap<KeyBind, Action> {
-        let mut binds = HashMap::new();
-        insert_shortcuts(&self.defaults, &mut binds, false);
-        insert_shortcuts(&self.custom, &mut binds, true);
-        binds
-    }
-
-    pub fn bindings_for_action(&self, action: KeyBindAction) -> (Vec<ResolvedBinding>, bool) {
-        let mut bindings = Vec::new();
-
-        let mut changed = false;
-        for (binding, default_action) in &self.defaults.0 {
-            if *default_action != action {
-                continue;
-            }
-
-            match self.custom.0.get(binding) {
-                Some(KeyBindAction::Disable) => {
-                    changed = true;
-                }
-                Some(custom_action) => {
-                    if *custom_action == action {
-                        bindings.push(ResolvedBinding {
-                            binding: binding.clone(),
-                            source: BindingSource::Custom,
-                        });
-                        changed = true;
-                    }
-                }
-                None => bindings.push(ResolvedBinding {
-                    binding: binding.clone(),
-                    source: BindingSource::Default,
-                }),
-            }
-        }
-
-        for (binding, custom_action) in &self.custom.0 {
-            if *custom_action == action
-                && !bindings.iter().any(|resolved| resolved.binding == *binding)
-            {
-                bindings.push(ResolvedBinding {
-                    binding: binding.clone(),
-                    source: BindingSource::Custom,
-                });
-                changed = true;
-            }
-        }
-
-        (bindings, changed)
-    }
-
-    pub fn action_for_binding(&self, binding: &Binding) -> Option<KeyBindAction> {
-        if let Some(action) = self.custom.0.get(binding) {
-            if *action == KeyBindAction::Disable {
-                return None;
-            }
-            return Some(*action);
-        }
-
-        self.defaults.0.get(binding).copied()
-    }
-
-    pub fn reset_action(&mut self, reset_action: KeyBindAction) {
-        self.custom.0.retain(|binding, action| {
-            if *action == reset_action {
-                // Remove any matching bindings
-                return false;
-            }
-            if let Some(default_action) = self.defaults.0.get(binding)
-                && *default_action == reset_action
-            {
-                // Remove binding that overrode a default
-                return false;
-            }
-            true
-        });
+        })
     }
 }
 
@@ -372,72 +252,13 @@ pub fn shortcut_groups() -> Vec<ShortcutGroup> {
     groups
 }
 
-pub fn binding_display(binding: &Binding) -> String {
-    binding
-        .to_key_bind()
-        .map(|key_bind| key_bind.to_string())
-        .unwrap_or_else(|| binding.key.clone())
-}
-
-pub fn binding_from_key(modifiers: Modifiers, key: Key) -> Option<Binding> {
-    if is_modifier_only_key(&key) {
-        return None;
-    }
-    let key = key_to_string(&key)?;
-    let mut binding_modifiers = Vec::new();
-    if modifiers.control() {
-        binding_modifiers.push(ModifierName::Ctrl);
-    }
-    if modifiers.shift() {
-        binding_modifiers.push(ModifierName::Shift);
-    }
-    if modifiers.alt() {
-        binding_modifiers.push(ModifierName::Alt);
-    }
-    if modifiers.logo() {
-        binding_modifiers.push(ModifierName::Super);
-    }
-    Some(Binding {
-        modifiers: binding_modifiers,
-        key,
-    })
-}
-
-fn insert_shortcuts(
-    shortcuts: &Shortcuts,
-    binds: &mut HashMap<KeyBind, Action>,
-    allow_disable: bool,
-) {
-    for (binding, action) in &shortcuts.0 {
-        let key_bind = match binding.to_key_bind() {
-            Some(key_bind) => key_bind,
-            None => {
-                log::warn!("invalid key binding: {:?}", binding);
-                continue;
-            }
-        };
-        if allow_disable && *action == KeyBindAction::Disable {
-            binds.remove(&key_bind);
-            continue;
-        }
-        let Some(action) = action.to_action() else {
-            log::warn!("unsupported shortcut action: {:?}", action);
-            continue;
-        };
-        binds.insert(key_bind, action);
-    }
-}
-
-fn fallback_shortcuts() -> Shortcuts {
-    let mut shortcuts = BTreeMap::new();
+pub fn fallback_shortcuts() -> Shortcuts {
+    let mut shortcuts = Shortcuts::new();
 
     macro_rules! bind {
         ([$($modifier:ident),* $(,)?], $key:expr, $action:ident) => {{
-            shortcuts.insert(
-                Binding {
-                    modifiers: vec![$(ModifierName::$modifier),*],
-                    key: $key.to_string(),
-                },
+            shortcuts.0.insert(
+                Binding::new([$(ModifierName::$modifier),*], $key),
                 KeyBindAction::$action,
             );
         }};
@@ -500,77 +321,59 @@ fn fallback_shortcuts() -> Shortcuts {
     // CTRL+Alt+L clears the scrollback.
     bind!([Ctrl, Alt], "L", ClearScrollback);
 
-    Shortcuts(shortcuts)
+    shortcuts
 }
 
-fn key_from_string(value: &str) -> Option<Key> {
-    match value {
-        "Backspace" => Some(Key::Named(Named::Backspace)),
-        "Enter" => Some(Key::Named(Named::Enter)),
-        "Escape" => Some(Key::Named(Named::Escape)),
-        "Insert" => Some(Key::Named(Named::Insert)),
-        "Delete" => Some(Key::Named(Named::Delete)),
-        "Tab" => Some(Key::Named(Named::Tab)),
-        "F1" => Some(Key::Named(Named::F1)),
-        "F2" => Some(Key::Named(Named::F2)),
-        "F3" => Some(Key::Named(Named::F3)),
-        "F4" => Some(Key::Named(Named::F4)),
-        "F5" => Some(Key::Named(Named::F5)),
-        "F6" => Some(Key::Named(Named::F6)),
-        "F7" => Some(Key::Named(Named::F7)),
-        "F8" => Some(Key::Named(Named::F8)),
-        "F9" => Some(Key::Named(Named::F9)),
-        "F10" => Some(Key::Named(Named::F10)),
-        "F11" => Some(Key::Named(Named::F11)),
-        "F12" => Some(Key::Named(Named::F12)),
-        "Home" => Some(Key::Named(Named::Home)),
-        "End" => Some(Key::Named(Named::End)),
-        "ArrowLeft" | "Left" => Some(Key::Named(Named::ArrowLeft)),
-        "ArrowRight" | "Right" => Some(Key::Named(Named::ArrowRight)),
-        "ArrowUp" | "Up" => Some(Key::Named(Named::ArrowUp)),
-        "ArrowDown" | "Down" => Some(Key::Named(Named::ArrowDown)),
-        "PageUp" => Some(Key::Named(Named::PageUp)),
-        "PageDown" => Some(Key::Named(Named::PageDown)),
-        "Space" | "space" => Some(Key::Character(" ".into())),
-        _ if !value.is_empty() => Some(Key::Character(value.into())),
-        _ => None,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The shape of the `shortcuts_custom` config key. The settings app writes this
+    /// file too, so the spelling is a contract and not an implementation detail.
+    const STORED: &str = r#"{
+    (modifiers: [Ctrl, Shift], key: "T"): TabNew,
+    (modifiers: [Ctrl], key: "q"): Disable,
+}"#;
+
+    #[test]
+    fn the_stored_shape_round_trips() {
+        let parsed: Shortcuts = ron::from_str(STORED).expect("stored shortcuts have to parse");
+
+        assert_eq!(
+            parsed.0.get(&Binding::new(
+                [ModifierName::Ctrl, ModifierName::Shift],
+                "T"
+            )),
+            Some(&KeyBindAction::TabNew)
+        );
+
+        let written = ron::to_string(&parsed).expect("shortcuts have to serialize");
+        let reparsed: Shortcuts = ron::from_str(&written).expect("written shortcuts have to parse");
+        assert_eq!(parsed, reparsed);
     }
-}
 
-fn key_to_string(key: &Key) -> Option<String> {
-    match key {
-        Key::Character(c) => {
-            if c == " " {
-                Some("Space".to_string())
-            } else if c.len() == 1 && c.chars().all(|ch| ch.is_ascii_alphabetic()) {
-                Some(c.to_uppercase())
-            } else {
-                Some(c.to_string())
-            }
+    #[test]
+    fn disable_drops_a_default_binding() {
+        let custom: Shortcuts =
+            ron::from_str(r#"{ (modifiers: [Ctrl, Shift], key: "T"): Disable }"#)
+                .expect("stored shortcuts have to parse");
+        let config = shortcuts_config(custom);
+
+        assert!(
+            !key_binds(&config)
+                .values()
+                .any(|action| matches!(action, Action::TabNew)),
+            "Ctrl+Shift+T was disabled, so no bind may open a tab"
+        );
+    }
+
+    #[test]
+    fn every_default_binding_resolves() {
+        for (binding, action) in fallback_shortcuts().iter() {
+            assert!(
+                binding.to_key_bind().is_some(),
+                "default binding {binding:?} for {action:?} does not resolve to a key"
+            );
         }
-        Key::Named(named) => Some(format!("{named:?}")),
-        _ => None,
     }
-}
-
-fn is_modifier_only_key(key: &Key) -> bool {
-    matches!(
-        key,
-        Key::Named(
-            Named::Alt
-                | Named::AltGraph
-                | Named::CapsLock
-                | Named::Control
-                | Named::Fn
-                | Named::FnLock
-                | Named::NumLock
-                | Named::ScrollLock
-                | Named::Shift
-                | Named::Symbol
-                | Named::SymbolLock
-                | Named::Meta
-                | Named::Hyper
-                | Named::Super
-        )
-    )
 }
