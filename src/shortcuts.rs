@@ -377,6 +377,64 @@ mod tests {
         }
     }
 
+    /// The declaration the package ships, which the settings app builds its page
+    /// from. It repeats what the code above says, so it can drift; this is what
+    /// makes the drift loud.
+    #[test]
+    fn the_declaration_matches_the_code() {
+        #[derive(serde::Deserialize)]
+        struct Declaration {
+            groups: Vec<Group>,
+        }
+        #[derive(serde::Deserialize)]
+        struct Group {
+            actions: Vec<Declared>,
+        }
+        #[derive(serde::Deserialize)]
+        struct Declared {
+            /// Quoted in the file: the settings app reads it as text, since it has
+            /// no enum to put it in.
+            action: String,
+            // Named so that RON has somewhere to put it: an ignored map with
+            // string keys is not something it can skip past.
+            #[allow(dead_code)]
+            label: HashMap<String, String>,
+            defaults: Vec<Binding>,
+        }
+
+        let path = "res/app-shortcuts/fun.wmde.term.ron";
+        let text = std::fs::read_to_string(path).expect("the declaration has to ship");
+        let declared: Declaration = ron::from_str(&text).expect("the declaration has to parse");
+
+        let mut from_declaration = Shortcuts::new();
+        let mut declared_actions = Vec::new();
+        for group in &declared.groups {
+            for entry in &group.actions {
+                let action: KeyBindAction = ron::from_str(&entry.action)
+                    .unwrap_or_else(|_| panic!("{} is not an action", entry.action));
+                declared_actions.push(action);
+                for binding in &entry.defaults {
+                    from_declaration.0.insert(binding.clone(), action);
+                }
+            }
+        }
+
+        assert_eq!(
+            from_declaration,
+            fallback_shortcuts(),
+            "{path} no longer lists the same default bindings as fallback_shortcuts()"
+        );
+
+        for group in shortcut_groups() {
+            for action in group.actions {
+                assert!(
+                    declared_actions.contains(&action),
+                    "{path} is missing {action:?}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn every_default_key_is_spelled_the_way_capture_spells_it() {
         // A captured key comes back upper case for single latin letters. A default

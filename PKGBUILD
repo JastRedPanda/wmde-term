@@ -49,6 +49,10 @@ package() {
   local appid=fun.wmde.term
   install -Dm755 "${CARGO_TARGET_DIR:-target}/release/wmde-term" "$pkgdir/usr/bin/wmde-term"
   install -Dm644 "res/$appid.desktop" "$pkgdir/usr/share/applications/$appid.desktop"
+  # The key bindings the terminal handles itself, so that Settings can offer a page
+  # for them without knowing anything about terminals.
+  install -Dm644 "res/app-shortcuts/$appid.ron" \
+    "$pkgdir/usr/share/wmde/app-shortcuts/$appid.ron"
   install -Dm644 "res/$appid.metainfo.xml" "$pkgdir/usr/share/metainfo/$appid.metainfo.xml"
   # App icons (all sizes) for the icon theme lookup.
   for icon in res/icons/hicolor/*/apps/"$appid".svg; do

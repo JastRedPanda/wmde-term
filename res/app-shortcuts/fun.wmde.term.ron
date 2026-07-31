@@ -1,0 +1,215 @@
+// WMDE application shortcuts declaration. See .doc/shortcuts/.
+//
+// Generated from src/shortcuts.rs; the test `the_declaration_matches_the_code`
+// fails if the two drift apart.
+(
+    schema: 1,
+    config: (id: "fun.wmde.term", version: 1, key: "shortcuts_custom"),
+    groups: [
+        (
+            title: { "": "Clipboard", "uk": "Буфер обміну" },
+            actions: [
+                (
+                    action: "SelectAll",
+                    label: { "": "Select all", "uk": "Вибрати все" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "A")],
+                ),
+                (
+                    action: "Copy",
+                    label: { "": "Copy", "uk": "Копіювати" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "C")],
+                ),
+                (
+                    action: "CopyOrSigint",
+                    label: { "": "Copy or SIGINT", "uk": "Копіювати або SIGINT" },
+                    defaults: [(modifiers: [Ctrl], key: "C")],
+                ),
+                (
+                    action: "Paste",
+                    label: { "": "Paste", "uk": "Вставити" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "V")],
+                ),
+                (
+                    action: "PastePrimary",
+                    label: { "": "Paste primary", "uk": "Вставити основне" },
+                    defaults: [(modifiers: [Shift], key: "Insert")],
+                ),
+                (
+                    action: "Find",
+                    label: { "": "Find", "uk": "Знайти" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "F")],
+                ),
+            ],
+        ),
+        (
+            title: { "": "Tabs", "uk": "Вкладки" },
+            actions: [
+                (
+                    action: "TabNew",
+                    label: { "": "New tab", "uk": "Нова вкладка" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "T")],
+                ),
+                (
+                    action: "TabClose",
+                    label: { "": "Close tab", "uk": "Закрити вкладку" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "W")],
+                ),
+                (
+                    action: "TabNext",
+                    label: { "": "Next tab", "uk": "Наступна вкладка" },
+                    defaults: [(modifiers: [Ctrl], key: "Tab")],
+                ),
+                (
+                    action: "TabPrev",
+                    label: { "": "Previous tab", "uk": "Попередня вкладка" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "Tab")],
+                ),
+                (
+                    action: "TabActivate0",
+                    label: { "": "Activate tab 1", "uk": "Вибрати вкладку 1" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "1")],
+                ),
+                (
+                    action: "TabActivate1",
+                    label: { "": "Activate tab 2", "uk": "Вибрати вкладку 2" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "2")],
+                ),
+                (
+                    action: "TabActivate2",
+                    label: { "": "Activate tab 3", "uk": "Вибрати вкладку 3" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "3")],
+                ),
+                (
+                    action: "TabActivate3",
+                    label: { "": "Activate tab 4", "uk": "Вибрати вкладку 4" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "4")],
+                ),
+                (
+                    action: "TabActivate4",
+                    label: { "": "Activate tab 5", "uk": "Вибрати вкладку 5" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "5")],
+                ),
+                (
+                    action: "TabActivate5",
+                    label: { "": "Activate tab 6", "uk": "Вибрати вкладку 6" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "6")],
+                ),
+                (
+                    action: "TabActivate6",
+                    label: { "": "Activate tab 7", "uk": "Вибрати вкладку 7" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "7")],
+                ),
+                (
+                    action: "TabActivate7",
+                    label: { "": "Activate tab 8", "uk": "Вибрати вкладку 8" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "8")],
+                ),
+                (
+                    action: "TabActivate8",
+                    label: { "": "Activate tab 9", "uk": "Вибрати вкладку 9" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "9")],
+                ),
+            ],
+        ),
+        (
+            title: { "": "Splits", "uk": "Розділити" },
+            actions: [
+                (
+                    action: "PaneSplitHorizontal",
+                    label: { "": "Split horizontal", "uk": "Розділити горизонтально" },
+                    defaults: [(modifiers: [Ctrl, Alt], key: "D")],
+                ),
+                (
+                    action: "PaneSplitVertical",
+                    label: { "": "Split vertical", "uk": "Розділити вертикально" },
+                    defaults: [(modifiers: [Ctrl, Alt], key: "R")],
+                ),
+                (
+                    action: "PaneToggleMaximized",
+                    label: { "": "Toggle maximized", "uk": "Перемкнути розгортання" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "X")],
+                ),
+                (
+                    action: "PaneFocusLeft",
+                    label: { "": "Focus pane left", "uk": "Фокус на ліву панель" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "ArrowLeft"), (modifiers: [Ctrl, Shift], key: "H")],
+                ),
+                (
+                    action: "PaneFocusRight",
+                    label: { "": "Focus pane right", "uk": "Фокус на праву панель" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "ArrowRight"), (modifiers: [Ctrl, Shift], key: "L")],
+                ),
+                (
+                    action: "PaneFocusUp",
+                    label: { "": "Focus pane up", "uk": "Фокус на верхню панель" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "ArrowUp"), (modifiers: [Ctrl, Shift], key: "K")],
+                ),
+                (
+                    action: "PaneFocusDown",
+                    label: { "": "Focus pane down", "uk": "Фокус на нижню панель" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "ArrowDown"), (modifiers: [Ctrl, Shift], key: "J")],
+                ),
+            ],
+        ),
+        (
+            title: { "": "Window", "uk": "Вікно" },
+            actions: [
+                (
+                    action: "WindowNew",
+                    label: { "": "New window", "uk": "Нове вікно" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "N")],
+                ),
+                (
+                    action: "WindowClose",
+                    label: { "": "Close window", "uk": "Закрити вікно" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "Q")],
+                ),
+                (
+                    action: "ToggleFullscreen",
+                    label: { "": "Toggle fullscreen", "uk": "На весь екран" },
+                    defaults: [(modifiers: [], key: "F11")],
+                ),
+                (
+                    action: "Settings",
+                    label: { "": "Settings", "uk": "Налаштування" },
+                    defaults: [(modifiers: [Ctrl], key: ",")],
+                ),
+            ],
+        ),
+        (
+            title: { "": "Zoom", "uk": "Масштаб" },
+            actions: [
+                (
+                    action: "ZoomIn",
+                    label: { "": "Larger text", "uk": "Збільшити" },
+                    defaults: [(modifiers: [Ctrl], key: "+"), (modifiers: [Ctrl], key: "=")],
+                ),
+                (
+                    action: "ZoomOut",
+                    label: { "": "Smaller text", "uk": "Зменшити" },
+                    defaults: [(modifiers: [Ctrl], key: "-")],
+                ),
+                (
+                    action: "ZoomReset",
+                    label: { "": "Default text size", "uk": "Звичайний розмір" },
+                    defaults: [(modifiers: [Ctrl], key: "0")],
+                ),
+            ],
+        ),
+        (
+            title: { "": "Other", "uk": "Інше" },
+            actions: [
+                (
+                    action: "ClearScrollback",
+                    label: { "": "Clear scrollback", "uk": "Очистити прокрутку" },
+                    defaults: [(modifiers: [Ctrl, Alt], key: "L")],
+                ),
+                (
+                    action: "PasswordManager",
+                    label: { "": "Password manager", "uk": "Менеджер паролів" },
+                    defaults: [(modifiers: [Ctrl, Alt], key: "P")],
+                ),
+            ],
+        ),
+    ],
+)
