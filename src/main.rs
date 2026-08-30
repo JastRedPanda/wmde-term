@@ -3854,14 +3854,11 @@ impl Application for App {
         .on_drag(Message::PaneDragged);
 
         //TODO: apply window border radius xs at bottom of window
-        // WMDE: upstream applies the pane spacing at its single return; our view has three,
-        // so it is applied once here instead. Each pane draws its own border stroke - a filled
-        // container behind the grid would stack its alpha with the translucent panes.
-        let pane_grid = if show_pane_borders {
-            pane_grid.spacing(space_xxxs)
-        } else {
-            pane_grid
-        };
+        // WMDE: 1.6 spaces the panes apart when their borders are on. Not taken. Upstream's
+        // terminal is translucent over a blurred backdrop, so a gap between panes reads as part
+        // of the material; ours is flat and opaque and `content_container` is false, so nothing
+        // is painted behind the body and the gap would show the desktop straight through. The
+        // 1px border each pane draws for itself is what separates them here.
 
         if !self.core.window.show_headerbar {
             // WMDE: no title bar to hold the tabs, so the strip moves to the top of the body -
