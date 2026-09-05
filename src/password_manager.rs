@@ -287,12 +287,16 @@ impl PasswordManager {
                             PasswordManagerMessage::FetchAndPastePassword(password_id.clone()),
                         ))
                         .into(),
-                    widget::button::custom(icon_cache_get("edit-delete-symbolic", 16))
-                        .on_press(Message::PasswordManager(PasswordManagerMessage::Delete(
-                            password_id.clone(),
-                        )))
-                        .class(style::Button::Icon)
-                        .into(),
+                    widget::tooltip(
+                        widget::button::custom(icon_cache_get("edit-delete-symbolic", 16))
+                            .on_press(Message::PasswordManager(PasswordManagerMessage::Delete(
+                                password_id.clone(),
+                            )))
+                            .class(style::Button::Icon),
+                        widget::text::body(fl!("remove-password")),
+                        widget::tooltip::Position::Top,
+                    )
+                    .into(),
                     if expanded {
                         widget::button::custom(icon_cache_get("go-up-symbolic", 16))
                             .on_press(Message::PasswordManager(PasswordManagerMessage::Collapse))

@@ -13,6 +13,7 @@ color-schemes = Кольорові схеми
 rename = Перейменувати
 export = Експорт
 delete = Видалити
+color-scheme-actions = Дії зі схемою
 import = Імпортувати
 import-errors = Помилки імпорту
 
@@ -24,6 +25,7 @@ command-line = Командний рядок
 tab-title = Заголовок вкладки
 tab-title-description = Замінити типовий заголовок вкладки
 add-profile = Додати профіль
+remove-profile = Вилучити профіль
 new-profile = Новий профіль
 make-default = Зробити типовим
 working-directory = Робоча тека
@@ -72,6 +74,7 @@ show-header-description = Показати заголовок через кон�
 find-placeholder = Знайти...
 find-previous = Знайти попередній
 find-next = Знайти наступний
+find-close = Закрити пошук
 
 # Menu
 
@@ -114,6 +117,7 @@ clear-scrollback = Очистити прокрутку
 menu-password-manager = Паролі...
 passwords-title = Паролі
 add-password = Додати пароль
+remove-password = Вилучити пароль
 password-input = Пароль
 password-input-description = Опис
 open-link = Відкрити ланку
@@ -140,6 +144,7 @@ shortcut-group-zoom = Масштаб
 tab-activate = Вибрати вкладку { $number }
 toggle-fullscreen = На весь екран
 add-another-keybinding = Додати ще сполучення
+remove-keybinding = Вилучити сполучення
 focus-pane-down = Фокус на нижню панель
 focus-pane-left = Фокус на ліву панель
 focus-pane-right = Фокус на праву панель

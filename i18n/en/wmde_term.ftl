@@ -14,6 +14,7 @@ color-schemes = Color schemes
 rename = Rename
 export = Export
 delete = Delete
+color-scheme-actions = Color scheme actions
 import = Import
 import-errors = Import errors
 
@@ -24,6 +25,7 @@ command-line = Command line
 tab-title = Tab title
 tab-title-description = Override the default tab title
 add-profile = Add profile
+remove-profile = Remove profile
 new-profile = New profile
 make-default = Make default
 working-directory = Working directory
@@ -69,6 +71,7 @@ tab-new-inherit-working-directory-description = Open new tabs and windows in the
 
 ### Keyboard shortcuts
 add-another-keybinding = Add another keybinding
+remove-keybinding = Remove keybinding
 cancel = Cancel
 close-window = Close window
 copy-or-sigint = Copy or SIGINT
@@ -100,6 +103,7 @@ type-to-search = Type to search...
 find-placeholder = Find...
 find-previous = Find previous
 find-next = Find next
+find-close = Close search
 
 # Menu
 
@@ -142,5 +146,6 @@ menu-about = About WMDE Terminal...
 menu-password-manager = Passwords...
 passwords-title = Passwords
 add-password = Add Password
+remove-password = Remove password
 password-input = Password
 password-input-description = Description

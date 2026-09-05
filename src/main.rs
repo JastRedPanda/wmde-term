@@ -1079,6 +1079,14 @@ impl App {
             }
             .class(style::Button::Icon);
 
+            // WMDE: the tooltip wraps the button and the popover wraps the tooltip. The other
+            // order would put the menu inside the tooltip overlay.
+            let button = widget::tooltip(
+                button,
+                widget::text::body(fl!("color-scheme-actions")),
+                widget::tooltip::Position::Top,
+            );
+
             let mut popover = widget::popover(button);
             if expanded {
                 let menu = menu::color_scheme_menu(
@@ -1230,14 +1238,16 @@ impl App {
                             widget::settings::item::builder(shortcuts::binding_display(
                                 &resolved.binding,
                             ))
-                            .control(
+                            .control(widget::tooltip(
                                 widget::button::custom(icon_cache_get("edit-delete-symbolic", 16))
                                     .class(style::Button::Icon)
                                     .on_press(Message::ShortcutRemove(
                                         resolved.binding.clone(),
                                         resolved.source,
                                     )),
-                            ),
+                                widget::text::body(fl!("remove-keybinding")),
+                                widget::tooltip::Position::Top,
+                            )),
                         );
                         list = list.divider_padding(div_binding);
                     }
@@ -1295,10 +1305,14 @@ impl App {
                 profiles_section = profiles_section.add(
                     widget::settings::item::builder(profile_name).control(
                         widget::row::with_children(vec![
-                            widget::button::custom(icon_cache_get("edit-delete-symbolic", 16))
-                                .on_press(Message::ProfileRemove(profile_id))
-                                .class(style::Button::Icon)
-                                .into(),
+                            widget::tooltip(
+                                widget::button::custom(icon_cache_get("edit-delete-symbolic", 16))
+                                    .on_press(Message::ProfileRemove(profile_id))
+                                    .class(style::Button::Icon),
+                                widget::text::body(fl!("remove-profile")),
+                                widget::tooltip::Position::Top,
+                            )
+                            .into(),
                             if expanded {
                                 widget::button::custom(icon_cache_get("go-up-symbolic", 16))
                                     .on_press(Message::ProfileCollapse(profile_id))
@@ -1854,11 +1868,17 @@ const WMDE_NEW_TAB_BUTTON_WIDTH: f32 = 32.0;
 // WMDE: the new-tab button. It sits right after the tabs when they are in the title bar, and at
 // the right end of the header otherwise (a split window, where the tabs are inside the panes).
 fn wmde_new_tab_button<'a>() -> Element<'a, Message> {
-    widget::button::custom(icon_cache_get("list-add-symbolic", 16))
-        .on_press(Message::TabNew)
-        .padding(8)
-        .class(style::Button::Icon)
-        .into()
+    // WMDE: the only unlabelled button in the title strip, so it carries a tooltip. Below,
+    // not above: the strip is the top edge of the window and there is no room over it.
+    widget::tooltip(
+        widget::button::custom(icon_cache_get("list-add-symbolic", 16))
+            .on_press(Message::TabNew)
+            .padding(8)
+            .class(style::Button::Icon),
+        widget::text::body(fl!("new-tab")),
+        widget::tooltip::Position::Bottom,
+    )
+    .into()
 }
 
 // WMDE: container background helper for the menu row, which sits under the title bar.
@@ -3793,11 +3813,15 @@ impl Application for App {
                     )
                     .into(),
                     widget::space::horizontal().into(),
-                    button::custom(icon_cache_get("window-close-symbolic", 16))
-                        .on_press(Message::Find(false))
-                        .padding(space_xxs)
-                        .class(style::Button::Icon)
-                        .into(),
+                    widget::tooltip(
+                        button::custom(icon_cache_get("window-close-symbolic", 16))
+                            .on_press(Message::Find(false))
+                            .padding(space_xxs)
+                            .class(style::Button::Icon),
+                        widget::text::body(fl!("find-close")),
+                        widget::tooltip::Position::Top,
+                    )
+                    .into(),
                 ])
                 .align_y(Alignment::Center)
                 .padding(space_xxs)
