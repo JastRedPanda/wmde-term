@@ -126,7 +126,7 @@
                 ),
                 (
                     action: "PaneToggleMaximized",
-                    label: { "": "Toggle maximized", "uk": "Перемкнути розгортання" },
+                    label: { "": "Maximize or restore pane", "uk": "Розгорнути або відновити панель" },
                     defaults: [(modifiers: [Ctrl, Shift], key: "X")],
                 ),
                 (

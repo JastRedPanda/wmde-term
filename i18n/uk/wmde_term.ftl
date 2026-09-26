@@ -69,6 +69,7 @@ focus-follow-mouse = Фокус введення слідує за мишею
 
 advanced = Додатково
 show-headerbar = Показувати заголовок
+window-header = Заголовок вікна
 show-header-description = Показати заголовок через контекстне меню правої кнопки миші
 # Find
 find-placeholder = Знайти...
@@ -107,7 +108,7 @@ next-tab = Наступна вкладка
 previous-tab = Попередня вкладка
 split-horizontal = Розділити горизонтально
 split-vertical = Розділити вертикально
-pane-toggle-maximize = Перемкнути розгортання
+pane-toggle-maximize = Розгорнути або відновити панель
 menu-color-schemes = Кольорові схеми...
 menu-settings = Налаштування...
 menu-about = Про Термінал WMDE...
