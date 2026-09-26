@@ -91,8 +91,13 @@ pub fn color_scheme_menu<'a>(
     id_opt: Option<ColorSchemeId>,
     name: &str,
 ) -> Element<'a, Message> {
-    let menu_item =
-        |label, message| menu_button(vec![widget::text(label).into()]).on_press(message);
+    let menu_item = |label, message| {
+        menu_button(vec![
+            widget::menu::icon_column(None),
+            widget::text(label).into(),
+        ])
+        .on_press(message)
+    };
 
     let mut column =
         widget::menu::menu_column::MenuColumn::with_capacity(if id_opt.is_some() { 3 } else { 1 });
@@ -114,7 +119,8 @@ pub fn color_scheme_menu<'a>(
     }
 
     widget::container(column)
-        .padding(1)
+        // 1 px border plus the menu padding
+        .padding(1.0 + widget::menu::PADDING)
         //TODO: move style to libcosmic
         .style(|theme| {
             let cosmic = theme.cosmic();
@@ -124,14 +130,15 @@ pub fn color_scheme_menu<'a>(
                 text_color: Some(component.on.into()),
                 background: Some(Background::Color(component.base.into())),
                 border: Border {
-                    radius: cosmic.radius_s().map(|x| x + 1.0).into(),
+                    radius: cosmic.radius_s().into(),
                     width: 1.0,
                     color: component.divider.into(),
                 },
                 ..Default::default()
             }
         })
-        .width(Length::Fixed(120.0))
+        // Labels start after the icon column, which the old 120 had no room for
+        .width(Length::Fixed(160.0))
         .into()
 }
 
@@ -150,7 +157,7 @@ pub fn menu_bar<'a>(
     let color_scheme_kind = config.color_scheme_kind(core.system_theme());
 
     responsive_menu_bar()
-        .item_height(ItemHeight::Dynamic(40))
+        .item_height(ItemHeight::Dynamic(20))
         .item_width(ItemWidth::Uniform(320))
         .spacing(4.0)
         .into_element(
