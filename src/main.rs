@@ -3562,6 +3562,8 @@ impl Application for App {
                 .into()
         };
 
+        // WMDE: the grid on screen is the active tab's, so the context menu acts on that tab.
+        let entity = self.tab_model.active();
         let pane_grid = PaneGrid::new(&active_tab.panes, move |pane, terminal, _is_maximized| {
             let mut tab_column = widget::column::with_capacity(1);
 
