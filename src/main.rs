@@ -1849,7 +1849,7 @@ impl App {
 // palette carries the Win11 blue on that layer. The transparent variants are picked when the
 // theme is frosted, so a translucent terminal keeps its blur.
 fn wmde_menubar(theme: &cosmic::Theme) -> Color {
-    Color::from(theme.cosmic().primary(theme.transparent).base)
+    cosmic::widget::header_strip_color(theme)
 }
 
 // WMDE: 16px icon plus 8px of padding on each side. The title-bar strip reserves exactly this
@@ -1874,16 +1874,9 @@ fn wmde_new_tab_button<'a>() -> Element<'a, Message> {
 
 // WMDE: container background helper for the menu row, which sits under the title bar.
 fn wmde_menubar_container() -> style::Container<'static> {
-    style::Container::custom(|theme| cosmic::iced::widget::container::Style {
-        background: Some(iced::Background::Color(wmde_menubar(theme))),
-        // WMDE: snap the fill to the pixel grid. The terminal below paints its own background
-        // snapped, so it starts at the rounded-up pixel row; an unsnapped strip ends on the
-        // fractional one, and the sliver between them is covered by neither. With
-        // content_container disabled there is nothing behind the body, so that sliver showed
-        // the desktop - a hairline of whatever sat under the window, right under the menu.
-        snap: true,
-        ..Default::default()
-    })
+    // The strip under the title bar, filled and pixel-snapped the way libcosmic fills every
+    // such strip.
+    cosmic::widget::header_strip_class()
 }
 
 // WMDE: Win11-style tabs - the active tab uses the menu-row color so it connects to the strip
@@ -1981,6 +1974,7 @@ impl Application for App {
     fn init(mut core: Core, flags: Self::Flags) -> (Self, Task<Self::Message>) {
         core.window.content_container = false;
         core.window.show_headerbar = flags.config.show_headerbar;
+        core.window.title_bar = cosmic::app::TitleBar::Tabs;
 
         // Update font name from config
         {
@@ -3518,12 +3512,6 @@ impl Application for App {
         ]
     }
 
-    fn header_end(&self) -> Vec<Element<'_, Self::Message>> {
-        // WMDE: the new-tab button rides with the tabs in header_start. There is no state left
-        // where it belongs here: the only reason the title bar carries no tabs is that there is
-        // no title bar, and then this region is never drawn either.
-        Vec::new()
-    }
 
     fn view_window(&self, window_id: window::Id) -> Element<'_, Message> {
         match &self.dialog_opt {
