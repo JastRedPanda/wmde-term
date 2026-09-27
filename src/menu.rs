@@ -130,7 +130,7 @@ pub fn color_scheme_menu<'a>(
                 text_color: Some(component.on.into()),
                 background: Some(Background::Color(component.base.into())),
                 border: Border {
-                    radius: cosmic.radius_s().into(),
+                    radius: widget::menu::RADIUS.into(),
                     width: 1.0,
                     color: component.divider.into(),
                 },
