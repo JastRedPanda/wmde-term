@@ -66,12 +66,12 @@
                 ),
                 (
                     action: "TabMoveLeft",
-                    label: { "": "Move tab left", "uk": "Перемістити ліворуч" },
+                    label: { "": "Move tab left", "uk": "Перемістити вкладку ліворуч" },
                     defaults: [(modifiers: [Ctrl, Shift], key: "PageUp")],
                 ),
                 (
                     action: "TabMoveRight",
-                    label: { "": "Move tab right", "uk": "Перемістити праворуч" },
+                    label: { "": "Move tab right", "uk": "Перемістити вкладку праворуч" },
                     defaults: [(modifiers: [Ctrl, Shift], key: "PageDown")],
                 ),
                 (

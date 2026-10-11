@@ -156,5 +156,5 @@ tab-new-inherit-working-directory = Нові вкладки та вікна ві
 tab-new-inherit-working-directory-description = Відкривати нові вкладки та вікна в робочому каталозі активної вкладки
 show-pane-borders = Показувати межі панелей
 window-header = Заголовок вікна
-move-tab-left = Перемістити ліворуч
-move-tab-right = Перемістити праворуч
+move-tab-left = Перемістити вкладку ліворуч
+move-tab-right = Перемістити вкладку праворуч
