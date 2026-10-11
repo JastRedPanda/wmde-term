@@ -40,7 +40,7 @@ settings = Налаштування
 
 appearance = Вигляд
 theme = Тема
-match-desktop = Системна
+match-desktop = Підігнати під стільницю
 dark = Темна
 light = Світла
 syntax-dark = Темна колірна схема
@@ -69,7 +69,6 @@ focus-follow-mouse = Фокус введення слідує за мишею
 
 advanced = Додатково
 show-headerbar = Показувати заголовок
-window-header = Заголовок вікна
 show-header-description = Показати заголовок через контекстне меню правої кнопки миші
 # Find
 find-placeholder = Знайти...
@@ -156,3 +155,6 @@ copy-link = Копіювати ланку
 tab-new-inherit-working-directory = Нові вкладки та вікна відкривати в поточному каталозі
 tab-new-inherit-working-directory-description = Відкривати нові вкладки та вікна в робочому каталозі активної вкладки
 show-pane-borders = Показувати межі панелей
+window-header = Заголовок вікна
+move-tab-left = Перемістити ліворуч
+move-tab-right = Перемістити праворуч

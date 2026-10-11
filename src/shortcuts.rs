@@ -70,6 +70,8 @@ pub enum KeyBindAction {
     TabNew,
     TabNext,
     TabPrev,
+    TabMoveLeft,
+    TabMoveRight,
     ToggleFullscreen,
     WindowClose,
     WindowNew,
@@ -86,53 +88,55 @@ impl ShortcutAction for KeyBindAction {
 
 impl KeyBindAction {
     fn to_action(self) -> Option<Action> {
-        Some(match self {
-            Self::Disable => return None,
-            Self::ClearScrollback => Action::ClearScrollback,
-            Self::Copy => Action::Copy,
-            Self::CopyOrSigint => Action::CopyOrSigint,
-            Self::Find => Action::Find,
-            Self::PaneFocusDown => Action::PaneFocusDown,
-            Self::PaneFocusLeft => Action::PaneFocusLeft,
-            Self::PaneFocusRight => Action::PaneFocusRight,
-            Self::PaneFocusUp => Action::PaneFocusUp,
-            Self::PaneSplitHorizontal => Action::PaneSplitHorizontal,
-            Self::PaneSplitVertical => Action::PaneSplitVertical,
-            Self::PaneToggleMaximized => Action::PaneToggleMaximized,
-            Self::Paste => Action::Paste,
-            Self::PastePrimary => Action::PastePrimary,
-            Self::SelectAll => Action::SelectAll,
-            Self::Settings => Action::Settings,
-            Self::TabActivate0 => Action::TabActivate0,
-            Self::TabActivate1 => Action::TabActivate1,
-            Self::TabActivate2 => Action::TabActivate2,
-            Self::TabActivate3 => Action::TabActivate3,
-            Self::TabActivate4 => Action::TabActivate4,
-            Self::TabActivate5 => Action::TabActivate5,
-            Self::TabActivate6 => Action::TabActivate6,
-            Self::TabActivate7 => Action::TabActivate7,
-            Self::TabActivate8 => Action::TabActivate8,
-            Self::TabClose => Action::TabClose,
-            Self::TabNew => Action::TabNew,
-            Self::TabNext => Action::TabNext,
-            Self::TabPrev => Action::TabPrev,
-            Self::ToggleFullscreen => Action::ToggleFullscreen,
-            Self::WindowClose => Action::WindowClose,
-            Self::WindowNew => Action::WindowNew,
-            Self::ZoomIn => Action::ZoomIn,
-            Self::ZoomOut => Action::ZoomOut,
-            Self::ZoomReset => Action::ZoomReset,
+        match self {
+            Self::Disable => None,
+            Self::ClearScrollback => Some(Action::ClearScrollback),
+            Self::Copy => Some(Action::Copy),
+            Self::CopyOrSigint => Some(Action::CopyOrSigint),
+            Self::Find => Some(Action::Find),
+            Self::PaneFocusDown => Some(Action::PaneFocusDown),
+            Self::PaneFocusLeft => Some(Action::PaneFocusLeft),
+            Self::PaneFocusRight => Some(Action::PaneFocusRight),
+            Self::PaneFocusUp => Some(Action::PaneFocusUp),
+            Self::PaneSplitHorizontal => Some(Action::PaneSplitHorizontal),
+            Self::PaneSplitVertical => Some(Action::PaneSplitVertical),
+            Self::PaneToggleMaximized => Some(Action::PaneToggleMaximized),
+            Self::Paste => Some(Action::Paste),
+            Self::PastePrimary => Some(Action::PastePrimary),
+            Self::SelectAll => Some(Action::SelectAll),
+            Self::Settings => Some(Action::Settings),
+            Self::TabActivate0 => Some(Action::TabActivate0),
+            Self::TabActivate1 => Some(Action::TabActivate1),
+            Self::TabActivate2 => Some(Action::TabActivate2),
+            Self::TabActivate3 => Some(Action::TabActivate3),
+            Self::TabActivate4 => Some(Action::TabActivate4),
+            Self::TabActivate5 => Some(Action::TabActivate5),
+            Self::TabActivate6 => Some(Action::TabActivate6),
+            Self::TabActivate7 => Some(Action::TabActivate7),
+            Self::TabActivate8 => Some(Action::TabActivate8),
+            Self::TabClose => Some(Action::TabClose),
+            Self::TabNew => Some(Action::TabNew),
+            Self::TabNext => Some(Action::TabNext),
+            Self::TabPrev => Some(Action::TabPrev),
+            Self::TabMoveLeft => Some(Action::TabMoveLeft),
+            Self::TabMoveRight => Some(Action::TabMoveRight),
+            Self::ToggleFullscreen => Some(Action::ToggleFullscreen),
+            Self::WindowClose => Some(Action::WindowClose),
+            Self::WindowNew => Some(Action::WindowNew),
+            Self::ZoomIn => Some(Action::ZoomIn),
+            Self::ZoomOut => Some(Action::ZoomOut),
+            Self::ZoomReset => Some(Action::ZoomReset),
             Self::PasswordManager => {
                 #[cfg(feature = "password_manager")]
                 {
-                    Action::PasswordManager
+                    Some(Action::PasswordManager)
                 }
                 #[cfg(not(feature = "password_manager"))]
                 {
-                    return None;
+                    None
                 }
             }
-        })
+        }
     }
 }
 
@@ -168,6 +172,8 @@ pub fn action_label(action: KeyBindAction) -> String {
         KeyBindAction::TabNew => fl!("new-tab"),
         KeyBindAction::TabNext => fl!("next-tab"),
         KeyBindAction::TabPrev => fl!("previous-tab"),
+        KeyBindAction::TabMoveLeft => fl!("move-tab-left"),
+        KeyBindAction::TabMoveRight => fl!("move-tab-right"),
         KeyBindAction::ToggleFullscreen => fl!("toggle-fullscreen"),
         KeyBindAction::WindowClose => fl!("close-window"),
         KeyBindAction::WindowNew => fl!("new-window"),
@@ -202,6 +208,8 @@ pub fn shortcut_groups() -> Vec<ShortcutGroup> {
             KeyBindAction::TabClose,
             KeyBindAction::TabNext,
             KeyBindAction::TabPrev,
+            KeyBindAction::TabMoveLeft,
+            KeyBindAction::TabMoveRight,
             KeyBindAction::TabActivate0,
             KeyBindAction::TabActivate1,
             KeyBindAction::TabActivate2,
@@ -290,6 +298,10 @@ pub fn fallback_shortcuts() -> Shortcuts {
     // Ctrl+Tab is not a special key for terminals and is free to use
     bind!([Ctrl], "Tab", TabNext);
     bind!([Ctrl, Shift], "Tab", TabPrev);
+
+    // Ctrl+Shift+PageUp/Down move tabs left and right
+    bind!([Ctrl, Shift], "PageUp", TabMoveLeft);
+    bind!([Ctrl, Shift], "PageDown", TabMoveRight);
 
     // Ctrl+Shift+# activates tabs by index
     bind!([Ctrl, Shift], "1", TabActivate0);

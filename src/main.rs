@@ -7,7 +7,7 @@ use cosmic::iced::core::keyboard::key::Named;
 use cosmic::iced::keyboard::key::Physical;
 use cosmic::widget::menu::action::MenuAction;
 use cosmic::widget::menu::key_bind::KeyBind;
-use cosmic::widget::segmented_button::ReorderEvent;
+use cosmic::widget::segmented_button::{InsertPosition, ReorderEvent};
 use cosmic::{
     Application, ApplicationExt, Element, action,
     app::{Core, Settings, Task, context_drawer},
@@ -286,6 +286,8 @@ pub enum Action {
     TabNewNoProfile,
     TabNext,
     TabPrev,
+    TabMoveLeft,
+    TabMoveRight,
     ToggleFullscreen,
     WindowClose,
     WindowNew,
@@ -339,6 +341,8 @@ impl Action {
             Self::TabNewNoProfile => Message::TabNewNoProfile,
             Self::TabNext => Message::TabNext,
             Self::TabPrev => Message::TabPrev,
+            Self::TabMoveLeft => Message::TabMoveLeft,
+            Self::TabMoveRight => Message::TabMoveRight,
             Self::ToggleFullscreen => Message::ToggleFullscreen,
             Self::WindowClose => Message::WindowClose,
             Self::WindowNew => Message::WindowNew,
@@ -451,6 +455,8 @@ pub enum Message {
     TabNewNoProfile,
     TabNext,
     TabPrev,
+    TabMoveLeft,
+    TabMoveRight,
     TermEvent(terminal::TerminalId, TermEvent),
     TermEventTx(mpsc::UnboundedSender<(terminal::TerminalId, TermEvent)>),
     ToggleFullscreen,
@@ -2094,7 +2100,7 @@ impl Application for App {
             .comments(fl!("comment"))
             .license("GPL-3.0-only")
             .license_url("https://spdx.org/licenses/GPL-3.0-only")
-            .developers([("Jeremy Soller", "jeremy@system76.com")])
+            .developers([("System76", "info@system76.com")])
             .links([
                 (fl!("repository"), "https://github.com/Lin-WMDE/wmde-term"),
                 (
@@ -3149,6 +3155,33 @@ impl Application for App {
                 let entity = self.tab_model.iter().nth(pos);
                 if let Some(entity) = entity {
                     return self.update(Message::TabActivate(entity));
+                }
+            }
+            // WMDE: tabs are top level, so the move acts on the one tab model rather than on
+            // the focused pane's own model as upstream does.
+            Message::TabMoveLeft => {
+                let tab_model = &mut self.tab_model;
+                let pos: usize = tab_model
+                    .position(tab_model.active())
+                    .expect("at least one tab is always open")
+                    .into();
+                if pos > 0 {
+                    let dragged = tab_model.iter().nth(pos).expect("tab unavailable");
+                    let target = tab_model.iter().nth(pos - 1).expect("previous tab missing");
+                    tab_model.reorder(dragged, target, InsertPosition::Before);
+                }
+            }
+            Message::TabMoveRight => {
+                let tab_model = &mut self.tab_model;
+                let len = tab_model.iter().count();
+                let pos: usize = tab_model
+                    .position(tab_model.active())
+                    .expect("at least one tab is always open")
+                    .into();
+                if pos < len - 1 && len > 1 {
+                    let dragged = tab_model.iter().nth(pos).expect("tab unavailable");
+                    let target = tab_model.iter().nth(pos + 1).expect("next tab missing");
+                    tab_model.reorder(dragged, target, InsertPosition::After);
                 }
             }
             Message::TermEvent(terminal_id, event) => {

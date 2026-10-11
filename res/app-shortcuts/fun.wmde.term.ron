@@ -65,6 +65,16 @@
                     defaults: [(modifiers: [Ctrl, Shift], key: "Tab")],
                 ),
                 (
+                    action: "TabMoveLeft",
+                    label: { "": "Move tab left", "uk": "Перемістити ліворуч" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "PageUp")],
+                ),
+                (
+                    action: "TabMoveRight",
+                    label: { "": "Move tab right", "uk": "Перемістити праворуч" },
+                    defaults: [(modifiers: [Ctrl, Shift], key: "PageDown")],
+                ),
+                (
                     action: "TabActivate0",
                     label: { "": "Activate tab 1", "uk": "Вибрати вкладку 1" },
                     defaults: [(modifiers: [Ctrl, Shift], key: "1")],
