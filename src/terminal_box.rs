@@ -423,9 +423,7 @@ where
             // matches the corners to the window border
             cosmic_theme.radius_0()
         } else {
-            cosmic_theme
-                .radius_s()
-                .map(|x| if x < 4.0 { x - 1.0 } else { x + 1.0 })
+            cosmic_theme.radius_s().map(|x| x - 1.0)
         };
         // When there's a headerbar, only round the bottom corners. Upstream 1.5 also skips
         // this when a pane border radius is set, but WMDE draws its own square 1px outline
