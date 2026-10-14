@@ -1,0 +1,94 @@
+# Один конфиг nFPM на оба формата. Стейджинг готовит `just package-staging`,
+# версию всегда подставляет just через env WMDE_VERSION (см. justfile).
+# ВАЖНО: только ${WMDE_VERSION} без :-дефолта — nFPM раскрывает env через
+# os.ExpandEnv и :- не понимает (версия молча станет 0.0.0~rc0).
+name: wmde-term
+arch: amd64
+version: ${WMDE_VERSION}
+release: 1
+maintainer: WMDE <wmde@wmde.fun>
+description: |-
+  WMDE terminal emulator (fork of cosmic-term)
+  Tabs and split panes, file dialogs from the file manager.
+homepage: https://wmde.fun
+license: GPL-3.0-only
+section: x11
+
+# Как в PKGBUILD: glib2/xkbcommon напрямую, wayland/mesa/шрифты — dlopen
+# через libcosmic. Иконки — из wmde-icons-base (suggests, пакет наш).
+depends:
+  - libc6 | glibc
+  - libgcc-s1 | libgcc
+  - libglib2.0-0t64
+  - libxkbcommon0
+  - libwayland-client0
+  - libfontconfig1
+
+suggests:
+  - wmde-icons-base
+
+contents:
+  - src: target/staging/usr/bin/wmde-term
+    dst: /usr/bin/wmde-term
+    file_info: { mode: 0755 }
+  - src: target/staging/usr/share/applications/
+    dst: /usr/share/applications/
+    type: tree
+  - src: target/staging/usr/share/metainfo/
+    dst: /usr/share/metainfo/
+    type: tree
+  - src: target/staging/usr/share/icons/
+    dst: /usr/share/icons/
+    type: tree
+  - src: target/staging/usr/share/wmde/
+    dst: /usr/share/wmde/
+    type: tree
+  # doc (copyright + changelog.Debian.gz) готовит just package-doc.
+  # Только для deb: в rpm нет %doc-разметки у nFPM,
+  # а лицензия и changelog там и так есть (License-тег + %changelog).
+  - src: target/staging/usr/share/doc/wmde-term/
+    dst: /usr/share/doc/wmde-term/
+    type: tree
+    packager: deb
+
+scripts:
+  postinstall: packaging/postinstall.sh
+  postremove: packaging/postremove.sh
+
+# %changelog для rpm генерит just package-staging (иначе E: no-changelogname-tag).
+# Путь от корня репо: nFPM резолвит его от cwd, а не от каталога конфига.
+changelog: target/changelog.yaml
+
+overrides:
+  deb:
+    depends:
+      - libc6
+      - libgcc-s1
+      - libglib2.0-0t64
+      - libxkbcommon0
+      - libwayland-client0
+      - libgl1
+      - libegl1
+      - libfontconfig1
+      - libfreetype6
+      - libexpat1
+    suggests:
+      - wmde-icons-base
+  rpm:
+    # SONAME вместо имён пакетов: имена расходятся между
+    # Fedora и openSUSE, а SONAME предоставляют обе семьи.
+    depends:
+      - libc.so.6()(64bit)
+      - libgcc_s.so.1()(64bit)
+      - libglib-2.0.so.0()(64bit)
+      - libgobject-2.0.so.0()(64bit)
+      - libgio-2.0.so.0()(64bit)
+      - libxkbcommon.so.0()(64bit)
+      - libwayland-client.so.0()(64bit)
+      - libGL.so.1()(64bit)
+      - libEGL.so.1()(64bit)
+      - libfontconfig.so.1()(64bit)
+      - libfreetype.so.6()(64bit)
+      - libexpat.so.1()(64bit)
+    suggests:
+      - wmde-icons-base
